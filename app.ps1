@@ -1,26 +1,48 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.3.0'
+$AppVersion = '1.3.1'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
 
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml
+function Show-ErreurDemarrage {
+    <# Utilise avant que PresentationFramework soit forcement charge : repose sur Windows Forms, quasi toujours disponible. #>
+    param([string]$Message)
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        [System.Windows.Forms.MessageBox]::Show($Message, 'Suivi Coaching - Erreur au demarrage', 'OK', 'Error') | Out-Null
+    } catch {
+        # Si meme Windows Forms est indisponible, on tente au moins un affichage console.
+        Write-Host $Message
+    }
+}
 
-Import-Module (Join-Path $AppRoot 'Modules\PSSQLite\1.1.0\PSSQLite.psd1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\ImportExcel\7.8.10\ImportExcel.psd1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Database.psm1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Clients.psm1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Administratif.psm1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Bibliotheques.psm1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Import.psm1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Programmes.psm1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Nutrition.psm1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Export.psm1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Suivi.psm1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Questionnaires.psm1') -Force
-Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Dashboard.psm1') -Force
+try {
+    # Quand l'appli est telechargee depuis internet (zip GitHub), Windows marque tous les fichiers extraits
+    # comme "provenant d'internet" et peut bloquer silencieusement les modules/DLL. On les debloque a chaque
+    # lancement : operation rapide et sans effet si les fichiers sont deja debloques.
+    Get-ChildItem -Path $AppRoot -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
+
+    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml
+
+    Import-Module (Join-Path $AppRoot 'Modules\PSSQLite\1.1.0\PSSQLite.psd1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\ImportExcel\7.8.10\ImportExcel.psd1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Database.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Clients.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Administratif.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Bibliotheques.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Import.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Programmes.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Nutrition.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Export.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Suivi.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Questionnaires.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Dashboard.psm1') -Force
+} catch {
+    Show-ErreurDemarrage "L'application n'a pas pu demarrer :`n`n$($_.Exception.Message)`n`nSi tu viens de telecharger l'application, verifie qu'aucun antivirus ne bloque le dossier, ou essaie de re-extraire le fichier zip apres avoir clique droit dessus > Proprietes > Debloquer."
+    exit 1
+}
 
 function Show-Info { param([string]$Message, [string]$Titre = 'Suivi Coaching')
     [System.Windows.MessageBox]::Show($Message, $Titre, 'OK', 'Information') | Out-Null
@@ -76,9 +98,14 @@ function Import-XamlWindow {
     [System.Windows.Markup.XamlReader]::Load($reader)
 }
 
-$xamlPath = Join-Path $AppRoot 'UI\MainWindow.xaml'
-$Window = Import-XamlWindow -Path $xamlPath
-$Window.Title = "Suivi Coaching v$AppVersion"
+try {
+    $xamlPath = Join-Path $AppRoot 'UI\MainWindow.xaml'
+    $Window = Import-XamlWindow -Path $xamlPath
+    $Window.Title = "Suivi Coaching v$AppVersion"
+} catch {
+    Show-Erreur "Impossible de charger l'interface :`n`n$($_.Exception.Message)"
+    exit 1
+}
 
 function Get-Ctrl { param([string]$Name) $Window.FindName($Name) }
 

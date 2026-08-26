@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.3.1] - 2026-08-26
+
+### Corrigé
+- L'application pouvait échouer silencieusement au démarrage ("rien ne se passe" au double-clic) après un téléchargement depuis internet : Windows bloque les fichiers extraits d'un zip téléchargé, et l'erreur restait invisible (fenêtre masquée). L'application se débloque désormais automatiquement à chaque lancement, et toute erreur de démarrage affiche maintenant un message explicite au lieu de se fermer sans rien afficher.
+
 ## [1.3.0] - 2026-08-26
 
 ### Ajouté
