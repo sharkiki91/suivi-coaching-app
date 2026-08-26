@@ -6,6 +6,12 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.3.0] - 2026-08-26
+
+### Ajouté
+- Import du questionnaire pré-coaching : complète désormais automatiquement le Téléphone, l'Email et les Objectifs de la fiche client à partir des réponses (colonnes optionnelles à mapper), **uniquement si le champ est encore vide** — aucune donnée déjà saisie n'est jamais écrasée.
+- Les numéros de téléphone importés sont lus en texte brut pour éviter la perte d'un éventuel 0 initial.
+
 ## [1.2.0] - 2026-08-26
 
 ### Ajouté

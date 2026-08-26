@@ -75,6 +75,46 @@ WHERE id = @Id
     }
 }
 
+function Set-ClientChampsSiVide {
+    <#
+        Complete Telephone / Email / Objectifs sur la fiche d'un client, mais uniquement
+        pour les champs actuellement vides (une valeur deja saisie n'est jamais ecrasee).
+        Utilise par l'import du questionnaire pre-coaching. Renvoie $true si au moins un
+        champ a ete complete.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $Id,
+        [string] $Telephone,
+        [string] $Email,
+        [string] $Objectifs
+    )
+
+    $client = Get-Client -DbPath $DbPath -Id $Id
+    if (-not $client) { return $false }
+
+    $modifie = $false
+    $nouveauTelephone = $client.telephone
+    if ([string]::IsNullOrWhiteSpace($client.telephone) -and -not [string]::IsNullOrWhiteSpace($Telephone)) {
+        $nouveauTelephone = $Telephone.Trim(); $modifie = $true
+    }
+    $nouvelEmail = $client.email
+    if ([string]::IsNullOrWhiteSpace($client.email) -and -not [string]::IsNullOrWhiteSpace($Email)) {
+        $nouvelEmail = $Email.Trim(); $modifie = $true
+    }
+    $nouveauxObjectifs = $client.objectifs
+    if ([string]::IsNullOrWhiteSpace($client.objectifs) -and -not [string]::IsNullOrWhiteSpace($Objectifs)) {
+        $nouveauxObjectifs = $Objectifs.Trim(); $modifie = $true
+    }
+
+    if (-not $modifie) { return $false }
+
+    Invoke-SqliteQuery -DataSource $DbPath -Query @"
+UPDATE clients SET telephone = @Telephone, email = @Email, objectifs = @Objectifs WHERE id = @Id
+"@ -SqlParameters @{ Telephone = $nouveauTelephone; Email = $nouvelEmail; Objectifs = $nouveauxObjectifs; Id = $Id }
+    return $true
+}
+
 function Set-ClientStatut {
     param(
         [Parameter(Mandatory)] [string] $DbPath,
@@ -85,4 +125,4 @@ function Set-ClientStatut {
     Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE clients SET statut = @Statut WHERE id = @Id" -SqlParameters @{ Statut = $Statut; Id = $Id }
 }
 
-Export-ModuleMember -Function Get-Clients, Get-Client, New-Client, Update-Client, Set-ClientStatut
+Export-ModuleMember -Function Get-Clients, Get-Client, New-Client, Update-Client, Set-ClientChampsSiVide, Set-ClientStatut

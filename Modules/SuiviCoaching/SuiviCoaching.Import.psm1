@@ -177,6 +177,10 @@ function Import-QuestionnaireDepuisExcel {
         Le rattachement au client se fait par email (colonne ColonneEmail, si fournie)
         puis par nom (colonne ColonneNom, si fournie) ; sans correspondance, la reponse
         reste non rattachee et pourra etre assignee manuellement dans l'application.
+
+        Pour le questionnaire pre-coaching, si ColonneTelephone/ColonneObjectif* sont
+        fournies, les champs Telephone/Email/Objectifs de la fiche client sont completes
+        automatiquement -- mais uniquement s'ils sont actuellement vides (jamais d'ecrasement).
     #>
     param(
         [Parameter(Mandatory)] [string] $DbPath,
@@ -184,12 +188,19 @@ function Import-QuestionnaireDepuisExcel {
         [Parameter(Mandatory)] [string] $ExcelPath,
         [string] $ColonneDate,
         [string] $ColonneNom,
-        [string] $ColonneEmail
+        [string] $ColonneEmail,
+        [string] $ColonneTelephone,
+        [string] $ColonneObjectifLongTerme,
+        [string] $ColonneObjectifCourtTerme,
+        [string] $ColonneMoyens
     )
 
-    $resultat = [ordered]@{ Importees = 0; Rattachees = 0; NonRattachees = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
+    $resultat = [ordered]@{ Importees = 0; Rattachees = 0; NonRattachees = 0; FichesCompletees = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
     $clients = @(Get-Clients -DbPath $DbPath -InclureArchives)
-    $lignes = @(Import-Excel -Path $ExcelPath)
+    # -AsText evite qu'un numero de telephone (souvent commencant par 0) soit lu comme un nombre et perde son 0 initial
+    $colonnesTexte = @()
+    if ($ColonneTelephone) { $colonnesTexte = @($ColonneTelephone) }
+    $lignes = if ($colonnesTexte.Count -gt 0) { @(Import-Excel -Path $ExcelPath -AsText $colonnesTexte) } else { @(Import-Excel -Path $ExcelPath) }
     $nomFichier = Split-Path $ExcelPath -Leaf
 
     foreach ($ligne in $lignes) {
@@ -209,6 +220,20 @@ function Import-QuestionnaireDepuisExcel {
             New-QuestionnaireReponse -DbPath $DbPath -ClientId $clientId -Type $Type -DateReponse $dateIso -DonneesJson $json -FichierSource $nomFichier | Out-Null
             $resultat.Importees++
             if ($clientId) { $resultat.Rattachees++ } else { $resultat.NonRattachees++ }
+
+            if ($clientId -and $Type -eq 'pre_coaching') {
+                $telephoneValeur = if ($ColonneTelephone) { [string]$ligne.$ColonneTelephone } else { $null }
+                $morceauxObjectifs = @()
+                foreach ($col in @($ColonneObjectifLongTerme, $ColonneObjectifCourtTerme, $ColonneMoyens)) {
+                    if ($col -and -not [string]::IsNullOrWhiteSpace([string]$ligne.$col)) { $morceauxObjectifs += [string]$ligne.$col }
+                }
+                $objectifsValeur = if ($morceauxObjectifs.Count -gt 0) { $morceauxObjectifs -join "`r`n`r`n" } else { $null }
+
+                if ($telephoneValeur -or $emailValeur -or $objectifsValeur) {
+                    $complete = Set-ClientChampsSiVide -DbPath $DbPath -Id $clientId -Telephone $telephoneValeur -Email $emailValeur -Objectifs $objectifsValeur
+                    if ($complete) { $resultat.FichesCompletees++ }
+                }
+            }
         } catch {
             $resultat.Erreurs.Add($_.Exception.Message)
         }

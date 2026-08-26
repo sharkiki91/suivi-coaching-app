@@ -39,6 +39,22 @@
         <Label Content="Colonne contenant l'email du client (optionnel, plus fiable que le nom)" />
         <ComboBox x:Name="CmbColonneEmail" />
 
+        <StackPanel x:Name="PanelChampsPreCoaching" Visibility="Collapsed">
+            <TextBlock Text="Compléter automatiquement la fiche client (uniquement si le champ est encore vide)" FontWeight="Bold" Margin="0,12,0,4" TextWrapping="Wrap" />
+
+            <Label Content="Colonne téléphone (optionnel)" />
+            <ComboBox x:Name="CmbColonneTelephone" />
+
+            <Label Content="Colonne objectif à long terme (optionnel)" />
+            <ComboBox x:Name="CmbColonneObjectifLongTerme" />
+
+            <Label Content="Colonne objectif à court terme (optionnel)" />
+            <ComboBox x:Name="CmbColonneObjectifCourtTerme" />
+
+            <Label Content="Colonne moyens à mettre en place (optionnel)" />
+            <ComboBox x:Name="CmbColonneMoyens" />
+        </StackPanel>
+
         <StackPanel Orientation="Horizontal" Margin="0,20,0,0" HorizontalAlignment="Right">
             <Button x:Name="BtnDialogAnnuler" Content="Annuler" />
             <Button x:Name="BtnDialogValider" Content="Importer" Background="#27AE60" Foreground="White" Margin="0" />

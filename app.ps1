@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.2.0'
+$AppVersion = '1.3.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -118,7 +118,8 @@ function Show-DialogNouvelElement {
 function Show-DialogImportQuestionnaire {
     <#
         Ouvre la boite de dialogue de mapping des colonnes pour l'import d'un questionnaire.
-        Retourne un hashtable @{ Type; ColonneDate; ColonneNom; ColonneEmail } ou $null si annule.
+        Retourne un hashtable @{ Type; ColonneDate; ColonneNom; ColonneEmail; ColonneTelephone;
+        ColonneObjectifLongTerme; ColonneObjectifCourtTerme; ColonneMoyens } ou $null si annule.
     #>
     param([Parameter(Mandatory)] [string[]] $Entetes)
 
@@ -128,6 +129,12 @@ function Show-DialogImportQuestionnaire {
     $cmbDate = $dlg.FindName('CmbColonneDate')
     $cmbNom = $dlg.FindName('CmbColonneNom')
     $cmbEmail = $dlg.FindName('CmbColonneEmail')
+    $panelPreCoaching = $dlg.FindName('PanelChampsPreCoaching')
+    $cmbTelephone = $dlg.FindName('CmbColonneTelephone')
+    $cmbObjectifLong = $dlg.FindName('CmbColonneObjectifLongTerme')
+    $cmbObjectifCourt = $dlg.FindName('CmbColonneObjectifCourtTerme')
+    $cmbMoyens = $dlg.FindName('CmbColonneMoyens')
+    $combosOptionnelsChampsClient = @($cmbTelephone, $cmbObjectifLong, $cmbObjectifCourt, $cmbMoyens)
 
     $optionsAvecVide = @('(aucune)') + $Entetes
     $cmbDate.ItemsSource = $Entetes
@@ -135,15 +142,21 @@ function Show-DialogImportQuestionnaire {
     $cmbEmail.ItemsSource = $optionsAvecVide
     $cmbNom.SelectedIndex = 0
     $cmbEmail.SelectedIndex = 0
+    foreach ($cmb in $combosOptionnelsChampsClient) { $cmb.ItemsSource = $optionsAvecVide; $cmb.SelectedIndex = 0 }
 
     $appliquerMapping = {
         $typeItem = $cmbType.SelectedItem
         if (-not $typeItem) { return }
+        $panelPreCoaching.Visibility = if ($typeItem.Tag -eq 'pre_coaching') { 'Visible' } else { 'Collapsed' }
         $mapping = Get-ImportMapping -DbPath $DbPath -Type $typeItem.Tag
         if (-not $mapping) { return }
         if ($mapping.ColonneDate -and ($Entetes -contains $mapping.ColonneDate)) { $cmbDate.SelectedItem = $mapping.ColonneDate }
         if ($mapping.ColonneNom -and ($Entetes -contains $mapping.ColonneNom)) { $cmbNom.SelectedItem = $mapping.ColonneNom }
         if ($mapping.ColonneEmail -and ($Entetes -contains $mapping.ColonneEmail)) { $cmbEmail.SelectedItem = $mapping.ColonneEmail }
+        if ($mapping.ColonneTelephone -and ($Entetes -contains $mapping.ColonneTelephone)) { $cmbTelephone.SelectedItem = $mapping.ColonneTelephone }
+        if ($mapping.ColonneObjectifLongTerme -and ($Entetes -contains $mapping.ColonneObjectifLongTerme)) { $cmbObjectifLong.SelectedItem = $mapping.ColonneObjectifLongTerme }
+        if ($mapping.ColonneObjectifCourtTerme -and ($Entetes -contains $mapping.ColonneObjectifCourtTerme)) { $cmbObjectifCourt.SelectedItem = $mapping.ColonneObjectifCourtTerme }
+        if ($mapping.ColonneMoyens -and ($Entetes -contains $mapping.ColonneMoyens)) { $cmbMoyens.SelectedItem = $mapping.ColonneMoyens }
     }
     $cmbType.Add_SelectionChanged($appliquerMapping)
     $cmbType.SelectedIndex = 0
@@ -153,11 +166,19 @@ function Show-DialogImportQuestionnaire {
     $dlg.FindName('BtnDialogValider').Add_Click({
         if (-not $cmbType.SelectedItem) { Show-Erreur "Sélectionne un type de questionnaire."; return }
         if (-not $cmbDate.SelectedItem) { Show-Erreur "Sélectionne la colonne contenant la date."; return }
+        function Get-ValeurComboOuNull($cmb) {
+            if ($cmb.SelectedItem -and $cmb.SelectedItem -ne '(aucune)') { return [string]$cmb.SelectedItem }
+            return $null
+        }
         $Script:ResultatDialog = @{
             Type = [string]$cmbType.SelectedItem.Tag
             ColonneDate = [string]$cmbDate.SelectedItem
-            ColonneNom = if ($cmbNom.SelectedItem -and $cmbNom.SelectedItem -ne '(aucune)') { [string]$cmbNom.SelectedItem } else { $null }
-            ColonneEmail = if ($cmbEmail.SelectedItem -and $cmbEmail.SelectedItem -ne '(aucune)') { [string]$cmbEmail.SelectedItem } else { $null }
+            ColonneNom = Get-ValeurComboOuNull $cmbNom
+            ColonneEmail = Get-ValeurComboOuNull $cmbEmail
+            ColonneTelephone = Get-ValeurComboOuNull $cmbTelephone
+            ColonneObjectifLongTerme = Get-ValeurComboOuNull $cmbObjectifLong
+            ColonneObjectifCourtTerme = Get-ValeurComboOuNull $cmbObjectifCourt
+            ColonneMoyens = Get-ValeurComboOuNull $cmbMoyens
         }
         $dlg.DialogResult = $true
     })
@@ -1069,10 +1090,14 @@ $GridQuestionnaires.Add_SelectionChanged({
         if (-not $resultat) { return }
 
         $res = Import-QuestionnaireDepuisExcel -DbPath $DbPath -Type $resultat.Type -ExcelPath $dialog.FileName `
-            -ColonneDate $resultat.ColonneDate -ColonneNom $resultat.ColonneNom -ColonneEmail $resultat.ColonneEmail
+            -ColonneDate $resultat.ColonneDate -ColonneNom $resultat.ColonneNom -ColonneEmail $resultat.ColonneEmail `
+            -ColonneTelephone $resultat.ColonneTelephone -ColonneObjectifLongTerme $resultat.ColonneObjectifLongTerme `
+            -ColonneObjectifCourtTerme $resultat.ColonneObjectifCourtTerme -ColonneMoyens $resultat.ColonneMoyens
         Save-ImportMapping -DbPath $DbPath -Type $resultat.Type -MappingJson ($resultat | ConvertTo-Json -Compress)
 
-        Show-Info "Réponses importées : $($res.Importees)`nRattachées automatiquement : $($res.Rattachees)`nNon rattachées : $($res.NonRattachees)"
+        $message = "Réponses importées : $($res.Importees)`nRattachées automatiquement : $($res.Rattachees)`nNon rattachées : $($res.NonRattachees)"
+        if ($resultat.Type -eq 'pre_coaching') { $message += "`nFiches client complétées : $($res.FichesCompletees)" }
+        Show-Info $message
         Update-VueQuestionnaires
     }
 })
