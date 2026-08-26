@@ -1,0 +1,47 @@
+﻿<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Importer des réponses" Width="480" SizeToContent="Height" MinWidth="420" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip" FontFamily="Segoe UI" FontSize="14">
+    <Window.Resources>
+        <Style TargetType="Label">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,8,0,2" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="MinWidth" Value="100" />
+        </Style>
+    </Window.Resources>
+    <StackPanel Margin="20">
+        <TextBlock Text="Importer des réponses de questionnaire" FontSize="18" FontWeight="Bold" Margin="0,0,0,4" />
+        <TextBlock TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,12">
+            Indique quelle colonne du fichier correspond à quoi. Ce choix est mémorisé pour les prochains imports du même type.
+        </TextBlock>
+
+        <Label Content="Type de questionnaire *" />
+        <ComboBox x:Name="CmbTypeQuestionnaire">
+            <ComboBoxItem Content="Pré-coaching" Tag="pre_coaching" />
+            <ComboBoxItem Content="Bilan" Tag="bilan" />
+        </ComboBox>
+
+        <Label Content="Colonne contenant la date de réponse *" />
+        <ComboBox x:Name="CmbColonneDate" />
+
+        <Label Content="Colonne contenant le nom du client (pour le rattachement automatique)" />
+        <ComboBox x:Name="CmbColonneNom" />
+
+        <Label Content="Colonne contenant l'email du client (optionnel, plus fiable que le nom)" />
+        <ComboBox x:Name="CmbColonneEmail" />
+
+        <StackPanel Orientation="Horizontal" Margin="0,20,0,0" HorizontalAlignment="Right">
+            <Button x:Name="BtnDialogAnnuler" Content="Annuler" />
+            <Button x:Name="BtnDialogValider" Content="Importer" Background="#27AE60" Foreground="White" Margin="0" />
+        </StackPanel>
+    </StackPanel>
+</Window>

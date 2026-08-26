@@ -1,0 +1,11 @@
+# Donnees reelles du coach : ne jamais versionner ni ecraser lors d'une mise a jour
+Data/*.db
+Data/*.db-journal
+Data/*.db-wal
+Data/*.db-shm
+Data/Backups/
+
+# Fichiers Windows/Editeurs
+Thumbs.db
+desktop.ini
+*.swp

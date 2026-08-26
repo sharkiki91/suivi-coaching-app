@@ -1,0 +1,33 @@
+# Changelog
+
+Toutes les évolutions notables de l'application sont documentées ici.
+
+Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr/), et le
+numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
+un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
+
+## [1.2.0] - 2026-08-26
+
+### Ajouté
+- Tableau de bord (écran d'accueil) : clients actifs, paiements en attente/retard, prochaines échéances, clients sans bilan récent.
+- Écran Suivi : import des réponses aux questionnaires Google Forms (pré-coaching / bilan) avec assistant de correspondance des colonnes et rattachement automatique au client par email/nom.
+- Import du suivi quotidien du client depuis un modèle Excel téléchargeable, sans écraser l'historique existant.
+- Graphique d'évolution du poids par client.
+- Roadmap hebdomadaire par client (suivi de phase semaine par semaine).
+- Numéro de version affiché dans la fenêtre et l'écran Outils.
+
+## [1.1.0] - 2026-08-26
+
+### Ajouté
+- Écran Programmes : création de séances et association d'exercices depuis la bibliothèque (séries, répétitions, récupération, tempo, notes), réordonnancement des séances.
+- Écran Nutrition : plans nutritionnels par client, types de jour, repas, calcul automatique des kcal/macros par repas et par jour.
+- Export PDF (via Edge/Chrome en tâche de fond) et Excel des programmes et plans nutrition.
+
+## [1.0.0] - 2026-08-26
+
+### Ajouté
+- Version initiale : fiches clients (créer/éditer/archiver).
+- Administratif : devis, commandes (mensuel/hebdomadaire/one-shot), génération automatique de l'échéancier, suivi des paiements.
+- Bibliothèques réutilisables : exercices, aliments (macros), compléments.
+- Import initial des bibliothèques depuis le fichier Excel historique du coach, export Excel des bibliothèques.
+- Sauvegarde manuelle de la base de données.
