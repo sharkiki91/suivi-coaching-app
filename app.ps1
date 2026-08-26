@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.3.1'
+$AppVersion = '1.3.2'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -82,11 +82,27 @@ function Get-IntOuNull { param([string]$Texte)
     throw "'$Texte' n'est pas un nombre entier valide."
 }
 
+$estPremierLancement = -not (Test-Path $DbPath)
+
 try {
     Initialize-Database -DbPath $DbPath
 } catch {
     Show-Erreur "Impossible d'initialiser la base de donnees :`n$($_.Exception.Message)"
     exit 1
+}
+
+if ($estPremierLancement) {
+    $fichierBibliothequesInitiales = Join-Path $AppRoot 'DonneesInitiales\Bibliotheques-initiales.xlsx'
+    if (Test-Path $fichierBibliothequesInitiales) {
+        try {
+            $resSeed = Import-BibliothequesDepuisExcel -DbPath $DbPath -ExcelPath $fichierBibliothequesInitiales
+            if ($resSeed.ExercicesImportes -gt 0 -or $resSeed.AlimentsImportes -gt 0 -or $resSeed.ComplementsImportes -gt 0) {
+                Show-Info "Premier lancement : bibliotheques initiales chargees.`n`nExercices : $($resSeed.ExercicesImportes)`nAliments : $($resSeed.AlimentsImportes)`nComplements : $($resSeed.ComplementsImportes)"
+            }
+        } catch {
+            # Non bloquant : l'appli reste utilisable meme si le chargement initial echoue (les bibliotheques resteront simplement vides).
+        }
+    }
 }
 
 function Import-XamlWindow {

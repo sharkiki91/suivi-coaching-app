@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.3.2] - 2026-08-26
+
+### Ajouté
+- Bibliothèques initiales (exercices, aliments, compléments) embarquées dans le dépôt (`DonneesInitiales/`) et chargées automatiquement au tout premier lancement de l'application. Auparavant, comme `Data/` est exclu de git pour protéger les données réelles, un téléchargement frais démarrait avec des bibliothèques vides.
+
 ## [1.3.1] - 2026-08-26
 
 ### Corrigé

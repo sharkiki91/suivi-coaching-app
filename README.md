@@ -10,6 +10,8 @@ La première fois, Windows peut afficher un avertissement de sécurité ("Window
 
 L'application s'ouvre dans une fenêtre. Aucune installation n'est nécessaire, aucune connexion internet n'est requise pour l'utiliser au quotidien.
 
+Au tout premier lancement (quand aucune base de données n'existe encore), les bibliothèques d'exercices/aliments/compléments sont automatiquement pré-remplies avec les données déjà fournies — un message le confirme.
+
 ### Si un double-clic sur "Lancer" ne fait rien du tout
 
 Cela arrive après un **téléchargement depuis internet** (ex. bouton "Download ZIP" sur GitHub) : Windows marque tous les fichiers extraits comme "provenant d'internet" et peut en bloquer silencieusement certains, sans afficher de message. Depuis la version 1.3.1, l'application essaie de se débloquer automatiquement à chaque lancement — si malgré tout rien ne se passe :
