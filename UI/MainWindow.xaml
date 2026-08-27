@@ -383,6 +383,14 @@
                                 <TextBox x:Name="TxtExerciceVariante" />
                                 <Label Content="Lien vidéo" />
                                 <TextBox x:Name="TxtExerciceLien" />
+                                <Label Content="Image du mouvement" />
+                                <Border BorderBrush="#DDD" BorderThickness="1" Height="120" Background="#F5F7FA" Margin="0,0,0,4">
+                                    <Image x:Name="ImgExerciceApercu" Stretch="Uniform" Margin="4" />
+                                </Border>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="BtnExerciceImageChoisir" Content="Choisir une image..." />
+                                    <Button x:Name="BtnExerciceImageRetirer" Content="Retirer l'image" Background="#C0392B" Foreground="White" />
+                                </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                                     <Button x:Name="BtnExerciceNouveau" Content="Nouveau" />
                                     <Button x:Name="BtnExerciceEnregistrer" Content="Enregistrer" Background="#27AE60" Foreground="White" />

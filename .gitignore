@@ -4,6 +4,7 @@ Data/*.db-journal
 Data/*.db-wal
 Data/*.db-shm
 Data/Backups/
+Data/ExercicesImages/
 
 # Fichiers Windows/Editeurs
 Thumbs.db

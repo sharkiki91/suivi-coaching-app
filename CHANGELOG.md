@@ -6,6 +6,13 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.9.0] - 2026-08-27
+
+### Ajouté
+- Bibliothèques > Exercices : possibilité d'attacher une image du mouvement à chaque exercice (bouton "Choisir une image...", aperçu affiché dans la fiche).
+- Export PDF d'un programme sportif : chaque exercice affiche désormais sa miniature (si une image a été attachée) et un lien cliquable "▶ Video" vers la vidéo de démonstration (si renseignée) — pensé pour être consulté sur mobile pendant la séance.
+- Export Excel d'un programme sportif : ajout de la colonne "Lien video".
+
 ## [1.8.0] - 2026-08-27
 
 ### Ajouté

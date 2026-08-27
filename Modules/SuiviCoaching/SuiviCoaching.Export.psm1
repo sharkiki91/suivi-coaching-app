@@ -52,11 +52,28 @@ function Get-StyleHtmlBase {
     tr:nth-child(even) { background-color: #F5F7FA; }
     .totaux { font-weight: bold; background-color: #E8F6EF; }
     .notes { font-style: italic; color: #555; margin-top: 4px; }
+    .miniature-exercice { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; display: block; }
+    .lien-video { color: #27AE60; font-weight: bold; text-decoration: none; white-space: nowrap; }
 </style>
 "@
 }
 
 function HtmlEncode { param([string]$Texte) [System.Net.WebUtility]::HtmlEncode($Texte) }
+
+function Get-ImageDataUri {
+    <# Lit un fichier image et le retourne encode en data URI base64 (pour l'incruster directement dans le HTML/PDF). Retourne $null si le fichier est introuvable. #>
+    param([string] $Path)
+    if (-not $Path -or -not (Test-Path $Path)) { return $null }
+    $mimeTypes = @{ '.jpg' = 'image/jpeg'; '.jpeg' = 'image/jpeg'; '.png' = 'image/png'; '.gif' = 'image/gif'; '.webp' = 'image/webp' }
+    $extension = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
+    if (-not $mimeTypes.ContainsKey($extension)) { return $null }
+    try {
+        $octets = [System.IO.File]::ReadAllBytes($Path)
+        return "data:$($mimeTypes[$extension]);base64,$([Convert]::ToBase64String($octets))"
+    } catch {
+        return $null
+    }
+}
 
 # ================= PROGRAMMES =================
 
@@ -74,6 +91,7 @@ WHERE p.id = @Id
 "@ -SqlParameters @{ Id = $ProgrammeId })
 
     $seances = @(Get-Seances -DbPath $DbPath -ProgrammeId $ProgrammeId)
+    $dossierData = Split-Path -Path $DbPath -Parent
 
     $sb = New-Object System.Text.StringBuilder
     [void]$sb.Append("<html><head><meta charset='utf-8'>$(Get-StyleHtmlBase)</head><body>")
@@ -90,11 +108,21 @@ WHERE p.id = @Id
             [void]$sb.Append("<p class='notes'>Aucun exercice dans cette seance.</p>")
             continue
         }
-        [void]$sb.Append("<table><tr><th>Exercice</th><th>Muscle cible</th><th>Series</th><th>Repetitions</th><th>Recup</th><th>Tempo</th><th>Notes</th></tr>")
+        [void]$sb.Append("<table><tr><th>Image</th><th>Exercice</th><th>Muscle cible</th><th>Series</th><th>Repetitions</th><th>Recup</th><th>Tempo</th><th>Video</th><th>Notes</th></tr>")
         foreach ($e in $exercices) {
             $recup = if ($e.recuperation_s) { "$($e.recuperation_s) s" } else { "" }
             $seriesTexte = if ($e.series) { [string]$e.series } else { '' }
-            [void]$sb.Append("<tr><td>$(HtmlEncode $e.exercice_nom)</td><td>$(HtmlEncode $e.muscle_cible)</td><td>$(HtmlEncode $seriesTexte)</td><td>$(HtmlEncode $e.repetitions)</td><td>$(HtmlEncode $recup)</td><td>$(HtmlEncode $e.tempo)</td><td>$(HtmlEncode $e.notes)</td></tr>")
+            $imageTd = ''
+            if ($e.image_path) {
+                $dataUri = Get-ImageDataUri -Path (Join-Path $dossierData $e.image_path)
+                if ($dataUri) { $imageTd = "<img class='miniature-exercice' src='$dataUri' alt='' />" }
+            }
+            $videoTd = ''
+            if ($e.lien_video) {
+                $lienEncode = HtmlEncode $e.lien_video
+                $videoTd = "<a class='lien-video' href='$lienEncode'>&#9654; Video</a>"
+            }
+            [void]$sb.Append("<tr><td>$imageTd</td><td>$(HtmlEncode $e.exercice_nom)</td><td>$(HtmlEncode $e.muscle_cible)</td><td>$(HtmlEncode $seriesTexte)</td><td>$(HtmlEncode $e.repetitions)</td><td>$(HtmlEncode $recup)</td><td>$(HtmlEncode $e.tempo)</td><td>$videoTd</td><td>$(HtmlEncode $e.notes)</td></tr>")
         }
         [void]$sb.Append("</table>")
     }
@@ -129,6 +157,7 @@ function Export-ProgrammeExcel {
                 Repetitions = $e.repetitions
                 'Recup (s)' = $e.recuperation_s
                 Tempo = $e.tempo
+                'Lien video' = $e.lien_video
                 Notes = $e.notes
             })
         }

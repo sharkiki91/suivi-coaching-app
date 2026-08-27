@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.8.0'
+$AppVersion = '1.9.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -566,15 +566,34 @@ $TxtExerciceNom = Get-Ctrl 'TxtExerciceNom'
 $TxtExerciceMuscle = Get-Ctrl 'TxtExerciceMuscle'
 $TxtExerciceVariante = Get-Ctrl 'TxtExerciceVariante'
 $TxtExerciceLien = Get-Ctrl 'TxtExerciceLien'
+$ImgExerciceApercu = Get-Ctrl 'ImgExerciceApercu'
 $Script:SelectedExerciceId = $null
+$Script:ExerciceImagePathCourant = $null
 
 function Update-VueExercices {
     $GridExercices.ItemsSource = @(Get-Exercices -DbPath $DbPath -Recherche (Get-TexteOuNull $TxtExerciceRecherche.Text))
 }
+function Update-ApercuImageExercice {
+    if ($Script:ExerciceImagePathCourant) {
+        $chemin = Join-Path (Split-Path $DbPath -Parent) $Script:ExerciceImagePathCourant
+        if (Test-Path $chemin) {
+            $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
+            $bitmap.BeginInit()
+            $bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
+            $bitmap.UriSource = New-Object System.Uri($chemin)
+            $bitmap.EndInit()
+            $ImgExerciceApercu.Source = $bitmap
+            return
+        }
+    }
+    $ImgExerciceApercu.Source = $null
+}
 function Clear-FormExercice {
     $Script:SelectedExerciceId = $null
+    $Script:ExerciceImagePathCourant = $null
     $TxtExerciceNom.Text = ''; $TxtExerciceMuscle.Text = ''; $TxtExerciceVariante.Text = ''; $TxtExerciceLien.Text = ''
     $GridExercices.SelectedItem = $null
+    Update-ApercuImageExercice
 }
 $GridExercices.Add_SelectionChanged({
     $item = $GridExercices.SelectedItem
@@ -584,6 +603,8 @@ $GridExercices.Add_SelectionChanged({
     $TxtExerciceMuscle.Text = [string]$item.muscle_cible
     $TxtExerciceVariante.Text = [string]$item.variante
     $TxtExerciceLien.Text = [string]$item.lien_video
+    $Script:ExerciceImagePathCourant = if ($item.image_path) { [string]$item.image_path } else { $null }
+    Update-ApercuImageExercice
 })
 (Get-Ctrl 'BtnExerciceRechercher').Add_Click({ Update-VueExercices })
 (Get-Ctrl 'BtnExerciceNouveau').Add_Click({ Clear-FormExercice })
@@ -592,13 +613,16 @@ $GridExercices.Add_SelectionChanged({
         if ([string]::IsNullOrWhiteSpace($TxtExerciceNom.Text)) { Show-Erreur "Le nom est obligatoire."; return }
         if ($Script:SelectedExerciceId) {
             Update-Exercice -DbPath $DbPath -Id $Script:SelectedExerciceId -Nom $TxtExerciceNom.Text.Trim() `
-                -MuscleCible (Get-TexteOuNull $TxtExerciceMuscle.Text) -Variante (Get-TexteOuNull $TxtExerciceVariante.Text) -LienVideo (Get-TexteOuNull $TxtExerciceLien.Text)
+                -MuscleCible (Get-TexteOuNull $TxtExerciceMuscle.Text) -Variante (Get-TexteOuNull $TxtExerciceVariante.Text) `
+                -LienVideo (Get-TexteOuNull $TxtExerciceLien.Text) -ImagePath $Script:ExerciceImagePathCourant
+            Update-VueExercices
+            Clear-FormExercice
         } else {
-            New-Exercice -DbPath $DbPath -Nom $TxtExerciceNom.Text.Trim() `
-                -MuscleCible (Get-TexteOuNull $TxtExerciceMuscle.Text) -Variante (Get-TexteOuNull $TxtExerciceVariante.Text) -LienVideo (Get-TexteOuNull $TxtExerciceLien.Text) | Out-Null
+            $nouvelId = New-Exercice -DbPath $DbPath -Nom $TxtExerciceNom.Text.Trim() `
+                -MuscleCible (Get-TexteOuNull $TxtExerciceMuscle.Text) -Variante (Get-TexteOuNull $TxtExerciceVariante.Text) -LienVideo (Get-TexteOuNull $TxtExerciceLien.Text)
+            Update-VueExercices
+            $GridExercices.SelectedItem = $GridExercices.Items | Where-Object { [int]$_.id -eq $nouvelId }
         }
-        Clear-FormExercice
-        Update-VueExercices
     }
 })
 (Get-Ctrl 'BtnExerciceSupprimer').Add_Click({
@@ -609,6 +633,41 @@ $GridExercices.Add_SelectionChanged({
             Clear-FormExercice
             Update-VueExercices
         }
+    }
+})
+(Get-Ctrl 'BtnExerciceImageChoisir').Add_Click({
+    Invoke-Protege {
+        if (-not $Script:SelectedExerciceId) { Show-Erreur "Enregistre d'abord l'exercice avant d'ajouter une image."; return }
+        $dialog = New-Object Microsoft.Win32.OpenFileDialog
+        $dialog.Filter = 'Images (*.jpg;*.jpeg;*.png;*.gif;*.webp)|*.jpg;*.jpeg;*.png;*.gif;*.webp'
+        if ($dialog.ShowDialog()) {
+            $dossierImages = Join-Path (Split-Path $DbPath -Parent) 'ExercicesImages'
+            if (-not (Test-Path $dossierImages)) { New-Item -ItemType Directory -Path $dossierImages -Force | Out-Null }
+            Get-ChildItem -Path $dossierImages -Filter "$($Script:SelectedExerciceId).*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+            $extension = [System.IO.Path]::GetExtension($dialog.FileName)
+            $nomFichier = "$($Script:SelectedExerciceId)$extension"
+            Copy-Item -Path $dialog.FileName -Destination (Join-Path $dossierImages $nomFichier) -Force
+            $Script:ExerciceImagePathCourant = "ExercicesImages\$nomFichier"
+            Update-Exercice -DbPath $DbPath -Id $Script:SelectedExerciceId -Nom $TxtExerciceNom.Text.Trim() `
+                -MuscleCible (Get-TexteOuNull $TxtExerciceMuscle.Text) -Variante (Get-TexteOuNull $TxtExerciceVariante.Text) `
+                -LienVideo (Get-TexteOuNull $TxtExerciceLien.Text) -ImagePath $Script:ExerciceImagePathCourant
+            Update-ApercuImageExercice
+            Update-VueExercices
+        }
+    }
+})
+(Get-Ctrl 'BtnExerciceImageRetirer').Add_Click({
+    Invoke-Protege {
+        if (-not $Script:SelectedExerciceId) { Show-Erreur "Selectionne un exercice."; return }
+        if (-not $Script:ExerciceImagePathCourant) { return }
+        $chemin = Join-Path (Split-Path $DbPath -Parent) $Script:ExerciceImagePathCourant
+        Remove-Item -Path $chemin -Force -ErrorAction SilentlyContinue
+        $Script:ExerciceImagePathCourant = $null
+        Update-Exercice -DbPath $DbPath -Id $Script:SelectedExerciceId -Nom $TxtExerciceNom.Text.Trim() `
+            -MuscleCible (Get-TexteOuNull $TxtExerciceMuscle.Text) -Variante (Get-TexteOuNull $TxtExerciceVariante.Text) `
+            -LienVideo (Get-TexteOuNull $TxtExerciceLien.Text) -ImagePath $null
+        Update-ApercuImageExercice
+        Update-VueExercices
     }
 })
 (Get-Ctrl 'BtnExerciceExporter').Add_Click({

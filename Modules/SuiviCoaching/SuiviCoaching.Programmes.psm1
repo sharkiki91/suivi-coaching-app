@@ -105,7 +105,7 @@ function Get-SeanceExercices {
         [Parameter(Mandatory)] [int] $SeanceId
     )
     $query = @"
-SELECT se.*, e.nom AS exercice_nom, e.muscle_cible, e.lien_video
+SELECT se.*, e.nom AS exercice_nom, e.muscle_cible, e.lien_video, e.image_path
 FROM seance_exercices se
 JOIN exercices e ON e.id = se.exercice_id
 WHERE se.seance_id = @SeanceId
