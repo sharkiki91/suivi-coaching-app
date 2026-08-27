@@ -85,6 +85,22 @@ SELECT last_insert_rowid() AS id;
     }).id
 }
 
+function Update-SeanceModeleExercice {
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $Id,
+        [int] $Series,
+        [string] $Repetitions,
+        [int] $RecuperationS,
+        [string] $Tempo,
+        [string] $Notes
+    )
+    Invoke-SqliteQuery -DataSource $DbPath -Query @"
+UPDATE seance_modele_exercices SET series = @Series, repetitions = @Repetitions, recuperation_s = @RecuperationS, tempo = @Tempo, notes = @Notes
+WHERE id = @Id
+"@ -SqlParameters @{ Id = $Id; Series = $Series; Repetitions = $Repetitions; RecuperationS = $RecuperationS; Tempo = $Tempo; Notes = $Notes }
+}
+
 function Remove-SeanceModeleExercice {
     param(
         [Parameter(Mandatory)] [string] $DbPath,
@@ -113,5 +129,5 @@ function New-SeanceDepuisModele {
 }
 
 Export-ModuleMember -Function Get-SeanceModeles, New-SeanceModele, Update-SeanceModele, Remove-SeanceModele, `
-    Get-SeanceModeleExercices, New-SeanceModeleExercice, Remove-SeanceModeleExercice, `
+    Get-SeanceModeleExercices, New-SeanceModeleExercice, Update-SeanceModeleExercice, Remove-SeanceModeleExercice, `
     New-SeanceDepuisModele

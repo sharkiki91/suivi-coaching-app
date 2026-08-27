@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.5.0'
+$AppVersion = '1.6.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -733,6 +733,7 @@ $TxtModExARecup = Get-Ctrl 'TxtModExARecup'
 $TxtModExATempo = Get-Ctrl 'TxtModExATempo'
 $TxtModExANotes = Get-Ctrl 'TxtModExANotes'
 $Script:SelectedModeleId = $null
+$Script:SelectedModeleExerciceId = $null
 
 function Update-VueModeles {
     $ListeModeles.ItemsSource = @(Get-SeanceModeles -DbPath $DbPath)
@@ -747,8 +748,15 @@ function Clear-FormModele {
     $ListeModeles.SelectedItem = $null
     $GridModeleExercices.ItemsSource = $null
 }
+function Clear-FormModeleExercice {
+    $Script:SelectedModeleExerciceId = $null
+    $CmbModeleExerciceAAjouter.SelectedItem = $null
+    $TxtModExASeries.Text = ''; $TxtModExARepetitions.Text = ''; $TxtModExARecup.Text = ''; $TxtModExATempo.Text = ''; $TxtModExANotes.Text = ''
+    $GridModeleExercices.SelectedItem = $null
+}
 function Update-VueModeleExercices {
     $GridModeleExercices.ItemsSource = $null
+    Clear-FormModeleExercice
     if (-not $ListeModeles.SelectedItem) { return }
     $GridModeleExercices.ItemsSource = @(Get-SeanceModeleExercices -DbPath $DbPath -SeanceModeleId $ListeModeles.SelectedItem.id)
 }
@@ -759,6 +767,17 @@ $ListeModeles.Add_SelectionChanged({
     $TxtModeleNom.Text = [string]$item.nom
     $TxtModeleNotes.Text = [string]$item.notes
     Update-VueModeleExercices
+})
+$GridModeleExercices.Add_SelectionChanged({
+    $item = $GridModeleExercices.SelectedItem
+    if ($null -eq $item) { return }
+    $Script:SelectedModeleExerciceId = [int]$item.id
+    $CmbModeleExerciceAAjouter.SelectedItem = $CmbModeleExerciceAAjouter.Items | Where-Object { [int]$_.id -eq [int]$item.exercice_id }
+    $TxtModExASeries.Text = [string]$item.series
+    $TxtModExARepetitions.Text = [string]$item.repetitions
+    $TxtModExARecup.Text = [string]$item.recuperation_s
+    $TxtModExATempo.Text = [string]$item.tempo
+    $TxtModExANotes.Text = [string]$item.notes
 })
 (Get-Ctrl 'BtnModeleNouveau').Add_Click({ Clear-FormModele })
 (Get-Ctrl 'BtnModeleEnregistrer').Add_Click({
@@ -783,14 +802,21 @@ $ListeModeles.Add_SelectionChanged({
         }
     }
 })
+(Get-Ctrl 'BtnModeleExerciceNouveau').Add_Click({ Clear-FormModeleExercice })
+
 (Get-Ctrl 'BtnModeleExerciceAjouter').Add_Click({
     Invoke-Protege {
         if (-not $ListeModeles.SelectedItem) { Show-Erreur "Selectionne d'abord un modele."; return }
-        if (-not $CmbModeleExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
-        New-SeanceModeleExercice -DbPath $DbPath -SeanceModeleId $ListeModeles.SelectedItem.id -ExerciceId $CmbModeleExerciceAAjouter.SelectedItem.id `
-            -Series (Get-IntOuNull $TxtModExASeries.Text) -Repetitions (Get-TexteOuNull $TxtModExARepetitions.Text) `
-            -RecuperationS (Get-IntOuNull $TxtModExARecup.Text) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text) | Out-Null
-        $TxtModExASeries.Text = ''; $TxtModExARepetitions.Text = ''; $TxtModExARecup.Text = ''; $TxtModExATempo.Text = ''; $TxtModExANotes.Text = ''
+        if ($Script:SelectedModeleExerciceId) {
+            Update-SeanceModeleExercice -DbPath $DbPath -Id $Script:SelectedModeleExerciceId `
+                -Series (Get-IntOuNull $TxtModExASeries.Text) -Repetitions (Get-TexteOuNull $TxtModExARepetitions.Text) `
+                -RecuperationS (Get-IntOuNull $TxtModExARecup.Text) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text)
+        } else {
+            if (-not $CmbModeleExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
+            New-SeanceModeleExercice -DbPath $DbPath -SeanceModeleId $ListeModeles.SelectedItem.id -ExerciceId $CmbModeleExerciceAAjouter.SelectedItem.id `
+                -Series (Get-IntOuNull $TxtModExASeries.Text) -Repetitions (Get-TexteOuNull $TxtModExARepetitions.Text) `
+                -RecuperationS (Get-IntOuNull $TxtModExARecup.Text) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text) | Out-Null
+        }
         Update-VueModeleExercices
     }
 })
@@ -816,6 +842,14 @@ $TxtExARepetitions = Get-Ctrl 'TxtExARepetitions'
 $TxtExARecup = Get-Ctrl 'TxtExARecup'
 $TxtExATempo = Get-Ctrl 'TxtExATempo'
 $TxtExANotes = Get-Ctrl 'TxtExANotes'
+$Script:SelectedSeanceExerciceId = $null
+
+function Clear-FormSeanceExercice {
+    $Script:SelectedSeanceExerciceId = $null
+    $CmbExerciceAAjouter.SelectedItem = $null
+    $TxtExASeries.Text = ''; $TxtExARepetitions.Text = ''; $TxtExARecup.Text = ''; $TxtExATempo.Text = ''; $TxtExANotes.Text = ''
+    $GridSeanceExercices.SelectedItem = $null
+}
 
 function Update-VueProgrammesClients {
     $clients = @(Get-Clients -DbPath $DbPath | ForEach-Object {
@@ -849,6 +883,7 @@ function Update-VueSeances {
 
 function Update-VueSeanceExercices {
     $GridSeanceExercices.ItemsSource = $null
+    Clear-FormSeanceExercice
     if (-not $ListeSeances.SelectedItem) { return }
     $GridSeanceExercices.ItemsSource = @(Get-SeanceExercices -DbPath $DbPath -SeanceId $ListeSeances.SelectedItem.id)
 }
@@ -856,6 +891,17 @@ function Update-VueSeanceExercices {
 $CmbProgrammeClient.Add_SelectionChanged({ Update-VueProgrammesPourClient })
 $CmbProgrammeSelection.Add_SelectionChanged({ Update-VueSeances })
 $ListeSeances.Add_SelectionChanged({ Update-VueSeanceExercices })
+$GridSeanceExercices.Add_SelectionChanged({
+    $item = $GridSeanceExercices.SelectedItem
+    if ($null -eq $item) { return }
+    $Script:SelectedSeanceExerciceId = [int]$item.id
+    $CmbExerciceAAjouter.SelectedItem = $CmbExerciceAAjouter.Items | Where-Object { [int]$_.id -eq [int]$item.exercice_id }
+    $TxtExASeries.Text = [string]$item.series
+    $TxtExARepetitions.Text = [string]$item.repetitions
+    $TxtExARecup.Text = [string]$item.recuperation_s
+    $TxtExATempo.Text = [string]$item.tempo
+    $TxtExANotes.Text = [string]$item.notes
+})
 
 (Get-Ctrl 'BtnProgrammeNouveau').Add_Click({
     Invoke-Protege {
@@ -949,14 +995,21 @@ $ListeSeances.Add_SelectionChanged({ Update-VueSeanceExercices })
     }
 })
 
+(Get-Ctrl 'BtnExerciceSeanceNouveau').Add_Click({ Clear-FormSeanceExercice })
+
 (Get-Ctrl 'BtnExerciceAjouter').Add_Click({
     Invoke-Protege {
         if (-not $ListeSeances.SelectedItem) { Show-Erreur "Selectionne d'abord une seance."; return }
-        if (-not $CmbExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
-        New-SeanceExercice -DbPath $DbPath -SeanceId $ListeSeances.SelectedItem.id -ExerciceId $CmbExerciceAAjouter.SelectedItem.id `
-            -Series (Get-IntOuNull $TxtExASeries.Text) -Repetitions (Get-TexteOuNull $TxtExARepetitions.Text) `
-            -RecuperationS (Get-IntOuNull $TxtExARecup.Text) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text) | Out-Null
-        $TxtExASeries.Text = ''; $TxtExARepetitions.Text = ''; $TxtExARecup.Text = ''; $TxtExATempo.Text = ''; $TxtExANotes.Text = ''
+        if ($Script:SelectedSeanceExerciceId) {
+            Update-SeanceExercice -DbPath $DbPath -Id $Script:SelectedSeanceExerciceId `
+                -Series (Get-IntOuNull $TxtExASeries.Text) -Repetitions (Get-TexteOuNull $TxtExARepetitions.Text) `
+                -RecuperationS (Get-IntOuNull $TxtExARecup.Text) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text)
+        } else {
+            if (-not $CmbExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
+            New-SeanceExercice -DbPath $DbPath -SeanceId $ListeSeances.SelectedItem.id -ExerciceId $CmbExerciceAAjouter.SelectedItem.id `
+                -Series (Get-IntOuNull $TxtExASeries.Text) -Repetitions (Get-TexteOuNull $TxtExARepetitions.Text) `
+                -RecuperationS (Get-IntOuNull $TxtExARecup.Text) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text) | Out-Null
+        }
         Update-VueSeanceExercices
     }
 })

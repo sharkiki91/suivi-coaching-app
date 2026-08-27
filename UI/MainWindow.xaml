@@ -496,7 +496,7 @@
 
                                 <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="1" Padding="12">
                                     <StackPanel>
-                                        <TextBlock Text="Ajouter un exercice au modèle (Exercice / Séries / Répétitions / Récup s / Tempo / Notes)" FontWeight="Bold" Margin="0,0,0,8" />
+                                        <TextBlock Text="Ajouter un exercice au modèle (sélectionne une ligne du tableau pour la modifier)" FontWeight="Bold" Margin="0,0,0,8" />
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
@@ -506,6 +506,7 @@
                                                 <ColumnDefinition Width="100" />
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <ComboBox x:Name="CmbModeleExerciceAAjouter" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
                                             <TextBox x:Name="TxtModExASeries" Grid.Column="1" Margin="0,0,6,0" />
@@ -513,7 +514,8 @@
                                             <TextBox x:Name="TxtModExARecup" Grid.Column="3" Margin="0,0,6,0" />
                                             <TextBox x:Name="TxtModExATempo" Grid.Column="4" Margin="0,0,6,0" />
                                             <TextBox x:Name="TxtModExANotes" Grid.Column="5" Margin="0,0,6,0" />
-                                            <Button x:Name="BtnModeleExerciceAjouter" Grid.Column="6" Content="Ajouter" Background="#27AE60" Foreground="White" />
+                                            <Button x:Name="BtnModeleExerciceNouveau" Grid.Column="6" Content="Nouveau" />
+                                            <Button x:Name="BtnModeleExerciceAjouter" Grid.Column="7" Content="Enregistrer" Background="#27AE60" Foreground="White" />
                                         </Grid>
                                         <Button x:Name="BtnModeleExerciceSupprimer" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" HorizontalAlignment="Left" Margin="0,8,0,0" />
                                     </StackPanel>
@@ -585,7 +587,7 @@
 
                         <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="1" Padding="12">
                             <StackPanel>
-                                <TextBlock Text="Ajouter un exercice à cette séance (Exercice / Séries / Répétitions / Récup s / Tempo / Notes)" FontWeight="Bold" Margin="0,0,0,8" />
+                                <TextBlock x:Name="TxtExerciceFormTitre" Text="Ajouter un exercice à cette séance (sélectionne une ligne du tableau pour la modifier)" FontWeight="Bold" Margin="0,0,0,8" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -595,6 +597,7 @@
                                         <ColumnDefinition Width="100" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <ComboBox x:Name="CmbExerciceAAjouter" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
                                     <TextBox x:Name="TxtExASeries" Grid.Column="1" Margin="0,0,6,0" />
@@ -602,7 +605,8 @@
                                     <TextBox x:Name="TxtExARecup" Grid.Column="3" Margin="0,0,6,0" />
                                     <TextBox x:Name="TxtExATempo" Grid.Column="4" Margin="0,0,6,0" />
                                     <TextBox x:Name="TxtExANotes" Grid.Column="5" Margin="0,0,6,0" />
-                                    <Button x:Name="BtnExerciceAjouter" Grid.Column="6" Content="Ajouter" Background="#27AE60" Foreground="White" />
+                                    <Button x:Name="BtnExerciceSeanceNouveau" Grid.Column="6" Content="Nouveau" />
+                                    <Button x:Name="BtnExerciceAjouter" Grid.Column="7" Content="Enregistrer" Background="#27AE60" Foreground="White" />
                                 </Grid>
                                 <Button x:Name="BtnExerciceSupprimerDeSeance" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" HorizontalAlignment="Left" Margin="0,8,0,0" />
                             </StackPanel>

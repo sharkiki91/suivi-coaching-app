@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.6.0] - 2026-08-27
+
+### Ajouté
+- Écran Programmes et onglet Modèles de séance : les lignes d'exercice (séries, répétitions, récup, tempo, notes) peuvent maintenant être modifiées directement en sélectionnant la ligne dans le tableau, sans avoir à la supprimer et la recréer. Le bouton "Ajouter" devient "Enregistrer" (crée une nouvelle ligne si rien n'est sélectionné, modifie la ligne sélectionnée sinon) et un bouton "Nouveau" permet de revenir à l'ajout. Ça s'applique aussi bien aux exercices ajoutés à la main qu'à ceux copiés depuis un modèle de séance.
+
 ## [1.5.0] - 2026-08-27
 
 ### Ajouté
