@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.4.0'
+$AppVersion = '1.5.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -1442,6 +1442,33 @@ $GridRoadmap.Add_SelectionChanged({
         if (-not $Script:SelectedRoadmapId) { Show-Erreur "Sélectionne une semaine."; return }
         if (Show-Confirmation "Supprimer cette semaine de roadmap ?") {
             Remove-RoadmapSemaine -DbPath $DbPath -Id $Script:SelectedRoadmapId
+            Update-VueRoadmap
+        }
+    }
+})
+
+(Get-Ctrl 'BtnTelechargerModeleRoadmap').Add_Click({
+    Invoke-Protege {
+        $dialog = New-Object Microsoft.Win32.SaveFileDialog
+        $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
+        $dialog.FileName = 'Modele_Roadmap.xlsx'
+        if ($dialog.ShowDialog()) {
+            Export-ModeleRoadmapExcel -Path $dialog.FileName
+            Show-Info "Modèle créé. Remplis-le (une ligne par semaine) puis réimporte-le via ""Importer la roadmap remplie...""."
+        }
+    }
+})
+
+(Get-Ctrl 'BtnImporterRoadmap').Add_Click({
+    Invoke-Protege {
+        if (-not $CmbSuiviClient.SelectedItem) { Show-Erreur "Sélectionne d'abord un client."; return }
+        $dialog = New-Object Microsoft.Win32.OpenFileDialog
+        $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
+        if ($dialog.ShowDialog()) {
+            $res = Import-RoadmapDepuisExcel -DbPath $DbPath -ClientId $CmbSuiviClient.SelectedItem.id -ExcelPath $dialog.FileName
+            $message = "Semaines importées : $($res.Importees)`nLignes sans numéro de semaine ignorées : $($res.IgnoreesSansNumero)"
+            if ($res.Erreurs.Count -gt 0) { $message += "`n`nRemarques :`n" + ($res.Erreurs -join "`n") }
+            Show-Info $message "Import terminé"
             Update-VueRoadmap
         }
     }

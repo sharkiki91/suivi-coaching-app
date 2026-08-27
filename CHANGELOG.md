@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.5.0] - 2026-08-27
+
+### Ajouté
+- Import de la roadmap hebdo (Suivi > Roadmap hebdo) : télécharge un modèle Excel vierge, remplis-le (une ligne par semaine), puis importe-le — comme pour le suivi quotidien. Réimporter un fichier met à jour les semaines déjà existantes (même numéro) au lieu de les dupliquer.
+
 ## [1.4.0] - 2026-08-27
 
 ### Ajouté

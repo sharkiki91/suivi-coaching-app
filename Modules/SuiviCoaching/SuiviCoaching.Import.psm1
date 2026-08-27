@@ -301,5 +301,82 @@ function Import-TrackingDepuisExcel {
     return [pscustomobject]$resultat
 }
 
+function Export-ModeleRoadmapExcel {
+    <# Genere un fichier Excel vierge (avec une ligne d'exemple) au format impose pour la roadmap hebdo du client. #>
+    param([Parameter(Mandatory)] [string] $Path)
+
+    $exemple = [pscustomobject]@{
+        'Semaine' = 1
+        'Date debut' = '01/09/2026'
+        'Phase' = 'DEFICIT'
+        'Nutrition' = '2500 KCAL'
+        'Poids moyen (kg)' = 84.5
+        'Depense calorique' = $null
+        'Cardio (min)' = 20
+        'Pas' = 20000
+        'Precision training' = 'Pas de muscu les jours de rugby'
+        'Evenements' = $null
+        'Notes' = 'Exemple de ligne a remplacer - une ligne par semaine'
+    }
+    if (Test-Path $Path) { Remove-Item $Path -Force }
+    $exemple | Export-Excel -Path $Path -WorksheetName 'Roadmap' -AutoSize -TableStyle Medium2 -FreezeTopRow
+}
+
+function Import-RoadmapDepuisExcel {
+    <# Importe la roadmap hebdo d'un client depuis un fichier au format du modele (Export-ModeleRoadmapExcel).
+       Une semaine deja presente (meme numero) pour ce client est mise a jour plutot que dupliquee. #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $ClientId,
+        [Parameter(Mandatory)] [string] $ExcelPath
+    )
+
+    $resultat = [ordered]@{ Importees = 0; IgnoreesSansNumero = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
+    $lignes = @(Import-Excel -Path $ExcelPath)
+
+    $existantes = @{}
+    foreach ($s in @(Get-RoadmapSemaines -DbPath $DbPath -ClientId $ClientId)) { $existantes[[int]$s.semaine_numero] = $s }
+
+    foreach ($ligne in $lignes) {
+        $numeroDouble = ConvertTo-DoubleTolerant $ligne.'Semaine'
+        if ($null -eq $numeroDouble) { $resultat.IgnoreesSansNumero++; continue }
+        $numero = [int]$numeroDouble
+        try {
+            $champs = @{
+                DbPath = $DbPath
+                SemaineNumero = $numero
+                DateDebut = (ConvertTo-DateIso $ligne.'Date debut')
+                Phase = (Get-TexteImportOuNull $ligne.'Phase')
+                Nutrition = (Get-TexteImportOuNull $ligne.'Nutrition')
+                PoidsMoyen = (ConvertTo-DoubleTolerant $ligne.'Poids moyen (kg)')
+                DepenseCalorique = (ConvertTo-DoubleTolerant $ligne.'Depense calorique')
+                CardioMinutes = (ConvertTo-DoubleTolerant $ligne.'Cardio (min)')
+                Pas = (ConvertTo-DoubleTolerant $ligne.'Pas')
+                PrecisionTraining = (Get-TexteImportOuNull $ligne.'Precision training')
+                Evenements = (Get-TexteImportOuNull $ligne.'Evenements')
+                Notes = (Get-TexteImportOuNull $ligne.'Notes')
+            }
+            if ($existantes.ContainsKey($numero)) {
+                Update-RoadmapSemaine -Id ([int]$existantes[$numero].id) @champs
+            } else {
+                New-RoadmapSemaine -ClientId $ClientId @champs | Out-Null
+            }
+            $resultat.Importees++
+        } catch {
+            $resultat.Erreurs.Add("Semaine $numero : $($_.Exception.Message)")
+        }
+    }
+    return [pscustomobject]$resultat
+}
+
+function Get-TexteImportOuNull {
+    param($Valeur)
+    if ($null -eq $Valeur) { return $null }
+    $texte = ([string]$Valeur).Trim()
+    if ([string]::IsNullOrWhiteSpace($texte)) { return $null }
+    return $texte
+}
+
 Export-ModuleMember -Function Import-BibliothequesDepuisExcel, Export-DonneesVersExcel, Get-EnTetesExcel, `
-    Import-QuestionnaireDepuisExcel, Export-ModeleTrackingExcel, Import-TrackingDepuisExcel
+    Import-QuestionnaireDepuisExcel, Export-ModeleTrackingExcel, Import-TrackingDepuisExcel, `
+    Export-ModeleRoadmapExcel, Import-RoadmapDepuisExcel

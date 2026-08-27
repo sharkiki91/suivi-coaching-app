@@ -36,7 +36,7 @@ L'application se navigue depuis le menu à gauche :
 - **Suivi** : choisis un client, puis :
   - *Questionnaires* : boutons pour envoyer les questionnaires pré-coaching/bilan (ouvre le Google Form dans le navigateur), bouton pour importer les réponses exportées depuis Google Sheets (un assistant te demande une fois quelles colonnes correspondent à la date/au nom/à l'email — mémorisé pour la prochaine fois). Les réponses sont rattachées automatiquement au bon client ; celles qui ne le sont pas peuvent être assignées manuellement via la case à cocher "Afficher les réponses non rattachées".
   - *Tracking quotidien* : télécharge un modèle Excel vierge à envoyer à ton client, puis importe le fichier qu'il t'a renvoyé rempli — sans écraser l'historique existant. Un graphique d'évolution du poids s'affiche automatiquement.
-  - *Roadmap hebdo* : suivi de phase semaine par semaine (comme l'onglet ROADMAP de ton ancien fichier Excel).
+  - *Roadmap hebdo* : suivi de phase semaine par semaine (comme l'onglet ROADMAP de ton ancien fichier Excel). Se remplit à la main semaine par semaine, ou peut être importée d'un coup : télécharge le modèle Excel vierge, remplis-le (une ligne par semaine), puis importe-le — réimporter met à jour les semaines déjà présentes au lieu de les dupliquer.
 - **Outils** :
   - *Importer les bibliothèques depuis un fichier Excel* : pour récupérer en un clic les exercices, aliments et compléments déjà présents dans ton fichier "SUIVI 2.0.xlsx" (ou tout fichier construit sur le même modèle). Les éléments déjà présents dans l'application ne sont pas dupliqués.
   - *Sauvegarder maintenant* : crée une copie de sécurité de toutes tes données.

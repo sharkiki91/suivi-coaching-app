@@ -791,12 +791,21 @@
                     <!-- Roadmap -->
                     <TabItem Header="Roadmap hebdo">
                         <Grid Margin="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="320" />
                             </Grid.ColumnDefinitions>
 
-                            <DataGrid x:Name="GridRoadmap" Grid.Column="0" Margin="0,0,12,0">
+                            <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,0,0,8">
+                                <Button x:Name="BtnTelechargerModeleRoadmap" Content="Télécharger le modèle vierge" />
+                                <Button x:Name="BtnImporterRoadmap" Content="Importer la roadmap remplie..." Background="#27AE60" Foreground="White" />
+                            </StackPanel>
+
+                            <DataGrid x:Name="GridRoadmap" Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Sem." Binding="{Binding semaine_numero}" Width="45" />
                                     <DataGridTextColumn Header="Début" Binding="{Binding date_debut}" Width="90" />
@@ -808,7 +817,7 @@
                                 </DataGrid.Columns>
                             </DataGrid>
 
-                            <StackPanel Grid.Column="1">
+                            <StackPanel Grid.Row="1" Grid.Column="1">
                                 <TextBlock Text="Semaine" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
                                 <Label Content="Numéro de semaine *" />
                                 <TextBox x:Name="TxtRoadmapSemaine" />
