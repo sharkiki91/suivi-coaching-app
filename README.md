@@ -26,8 +26,8 @@ L'application se navigue depuis le menu à gauche :
 
 - **Clients** : créer et gérer les fiches de tes clients (identité, contact, objectifs, notes). La case à cocher en haut permet d'afficher aussi les clients archivés.
 - **Administratif** :
-  - *Devis* : crée un devis pour un client, puis marque-le "Accepté" ou "Refusé". Un devis accepté peut être transformé en commande.
-  - *Commandes* : crée une commande (mensuelle, hebdomadaire ou paiement unique) avec un montant total. L'échéancier de paiement est généré automatiquement.
+  - *Devis* : crée un devis pour un client, puis marque-le "Accepté" ou "Refusé". Un devis accepté peut être transformé en commande — une fois transformé, il disparaît automatiquement de cette liste (il reste consultable dans Commandes). Filtre par statut disponible.
+  - *Commandes* : crée une commande (mensuelle, hebdomadaire ou paiement unique) avec un montant total. L'échéancier de paiement est généré automatiquement. Le statut passe tout seul à "Terminée" dès que toutes les échéances sont payées ; il peut aussi être changé à la main (Terminée / Annulée / Réactiver). Filtre par statut disponible.
   - *Paiements / Échéances* : vue de toutes les échéances, avec filtre (en attente / en retard / payées) et bouton pour marquer une échéance comme payée.
 - **Bibliothèques** : tes listes réutilisables d'exercices, d'aliments (avec leurs valeurs nutritionnelles), de compléments et de **modèles de séance** (ex. "Haut du corps", "Full body"). Recherche, ajout, modification, suppression, et export en Excel.
 - **Programmes** : choisis un client, crée un programme, ajoute des séances (avec les flèches ▲▼ pour les réordonner) — soit vides, soit directement à partir d'un modèle de séance via "Créer depuis un modèle...", puis ajoute/ajuste des exercices à chaque séance en piochant dans ta bibliothèque (séries, répétitions, récup, tempo, notes). Clique sur une ligne du tableau pour la modifier directement (plus besoin de la supprimer et la recréer) ; ça marche aussi pour les exercices copiés depuis un modèle de séance. Exporte le programme en PDF ou Excel pour l'envoyer au client.

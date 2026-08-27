@@ -3,9 +3,12 @@
 # --- Devis ---
 
 function Get-Devis {
+    <# Ne retourne que les devis pas encore transformes en commande, sauf si -InclureTransformes est precise. #>
     param(
         [Parameter(Mandatory)] [string] $DbPath,
-        [int] $ClientId
+        [int] $ClientId,
+        [string] $Statut,
+        [switch] $InclureTransformes
     )
 
     $query = @"
@@ -13,13 +16,14 @@ SELECT d.*, c.nom || ' ' || c.prenom AS client_nom
 FROM devis d
 JOIN clients c ON c.id = d.client_id
 "@
-    if ($ClientId) {
-        $query += " WHERE d.client_id = @ClientId"
-        $query += " ORDER BY d.date_creation DESC"
-        return Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{ ClientId = $ClientId }
-    }
+    $conditions = New-Object System.Collections.Generic.List[string]
+    $params = @{}
+    if (-not $InclureTransformes) { $conditions.Add("NOT EXISTS (SELECT 1 FROM commandes cmd WHERE cmd.devis_id = d.id)") }
+    if ($ClientId) { $conditions.Add("d.client_id = @ClientId"); $params.ClientId = $ClientId }
+    if ($Statut) { $conditions.Add("d.statut = @Statut"); $params.Statut = $Statut }
+    if ($conditions.Count -gt 0) { $query += " WHERE " + ($conditions -join " AND ") }
     $query += " ORDER BY d.date_creation DESC"
-    Invoke-SqliteQuery -DataSource $DbPath -Query $query
+    Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters $params
 }
 
 function New-Devis {
@@ -57,7 +61,8 @@ function Set-DevisStatut {
 function Get-Commandes {
     param(
         [Parameter(Mandatory)] [string] $DbPath,
-        [int] $ClientId
+        [int] $ClientId,
+        [string] $Statut
     )
 
     $query = @"
@@ -65,12 +70,41 @@ SELECT cmd.*, c.nom || ' ' || c.prenom AS client_nom
 FROM commandes cmd
 JOIN clients c ON c.id = cmd.client_id
 "@
-    if ($ClientId) {
-        $query += " WHERE cmd.client_id = @ClientId ORDER BY cmd.date_debut DESC"
-        return Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{ ClientId = $ClientId }
-    }
+    $conditions = New-Object System.Collections.Generic.List[string]
+    $params = @{}
+    if ($ClientId) { $conditions.Add("cmd.client_id = @ClientId"); $params.ClientId = $ClientId }
+    if ($Statut) { $conditions.Add("cmd.statut = @Statut"); $params.Statut = $Statut }
+    if ($conditions.Count -gt 0) { $query += " WHERE " + ($conditions -join " AND ") }
     $query += " ORDER BY cmd.date_debut DESC"
-    Invoke-SqliteQuery -DataSource $DbPath -Query $query
+    Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters $params
+}
+
+function Set-CommandeStatut {
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $Id,
+        [Parameter(Mandatory)] [ValidateSet('active', 'terminee', 'annulee')] [string] $Statut
+    )
+
+    Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE commandes SET statut = @Statut WHERE id = @Id" -SqlParameters @{ Statut = $Statut; Id = $Id }
+}
+
+function Update-CommandesTermineesAuto {
+    <# Passe automatiquement au statut 'terminee' toute commande active dont toutes les echeances sont payees. #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath
+    )
+
+    Invoke-SqliteQuery -DataSource $DbPath -Query @"
+UPDATE commandes
+SET statut = 'terminee'
+WHERE statut = 'active'
+  AND id IN (
+    SELECT commande_id FROM echeances
+    GROUP BY commande_id
+    HAVING COUNT(*) = SUM(CASE WHEN statut = 'payee' THEN 1 ELSE 0 END)
+  )
+"@
 }
 
 function New-Commande {
@@ -200,4 +234,5 @@ function Set-EcheanceStatut {
         -SqlParameters @{ Statut = $Statut; DatePaiement = $datePaiement; Id = $Id }
 }
 
-Export-ModuleMember -Function Get-Devis, New-Devis, Set-DevisStatut, Get-Commandes, New-Commande, Update-EcheancesRetard, Get-Echeances, Set-EcheanceStatut
+Export-ModuleMember -Function Get-Devis, New-Devis, Set-DevisStatut, Get-Commandes, New-Commande, Set-CommandeStatut, `
+    Update-CommandesTermineesAuto, Update-EcheancesRetard, Get-Echeances, Set-EcheanceStatut

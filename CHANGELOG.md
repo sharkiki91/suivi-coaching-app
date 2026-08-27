@@ -6,6 +6,14 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.7.0] - 2026-08-27
+
+### Ajouté
+- Un devis transformé en commande disparaît automatiquement de la liste des Devis (il reste consultable dans Commandes).
+- Une commande passe automatiquement au statut "Terminée" dès que toutes ses échéances sont marquées payées — corrige les commandes déjà entièrement payées qui restaient bloquées sur "Active".
+- Gestion manuelle du statut d'une commande (Terminée / Annulée / Réactiver), comme pour les devis.
+- Filtres par statut sur les onglets Devis (Tous / En attente / Accepté / Refusé) et Commandes (Toutes / Active / Terminée / Annulée), en plus du filtre déjà existant sur Paiements/Échéances.
+
 ## [1.6.0] - 2026-08-27
 
 ### Ajouté

@@ -197,11 +197,26 @@
                     <!-- Devis -->
                     <TabItem Header="Devis">
                         <Grid Margin="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="320" />
                             </Grid.ColumnDefinitions>
-                            <DataGrid x:Name="GridDevis" Grid.Column="0" Margin="0,0,12,0">
+
+                            <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                <Label Content="Filtrer :" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <ComboBox x:Name="CmbDevisFiltre" Width="160">
+                                    <ComboBoxItem Content="Tous" IsSelected="True" />
+                                    <ComboBoxItem Content="En attente" />
+                                    <ComboBoxItem Content="Accepté" />
+                                    <ComboBoxItem Content="Refusé" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <DataGrid x:Name="GridDevis" Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Client" Binding="{Binding client_nom}" Width="160" />
                                     <DataGridTextColumn Header="Prestations" Binding="{Binding prestations}" Width="*" />
@@ -209,7 +224,7 @@
                                     <DataGridTextColumn Header="Statut" Binding="{Binding statut}" Width="100" />
                                 </DataGrid.Columns>
                             </DataGrid>
-                            <StackPanel Grid.Column="1">
+                            <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1">
                                 <TextBlock Text="Nouveau devis" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
                                 <Label Content="Client *" />
                                 <ComboBox x:Name="CmbDevisClient" DisplayMemberPath="affichage" />
@@ -227,6 +242,7 @@
                                     <Button x:Name="BtnDevisRefuser" Content="Refusé" Background="#C0392B" Foreground="White" />
                                 </StackPanel>
                                 <Button x:Name="BtnDevisTransformer" Content="Transformer en commande" Margin="0,8,0,0" HorizontalAlignment="Left" />
+                                <TextBlock Text="Un devis transformé en commande disparaît automatiquement de cette liste (il reste visible dans Commandes)." FontStyle="Italic" TextWrapping="Wrap" Foreground="Gray" Margin="0,8,0,0" />
                             </StackPanel>
                         </Grid>
                     </TabItem>
@@ -234,11 +250,26 @@
                     <!-- Commandes -->
                     <TabItem Header="Commandes">
                         <Grid Margin="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="320" />
                             </Grid.ColumnDefinitions>
-                            <DataGrid x:Name="GridCommandes" Grid.Column="0" Margin="0,0,12,0">
+
+                            <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                <Label Content="Filtrer :" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <ComboBox x:Name="CmbCommandeFiltre" Width="160">
+                                    <ComboBoxItem Content="Toutes" IsSelected="True" />
+                                    <ComboBoxItem Content="Active" />
+                                    <ComboBoxItem Content="Terminée" />
+                                    <ComboBoxItem Content="Annulée" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <DataGrid x:Name="GridCommandes" Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Client" Binding="{Binding client_nom}" Width="140" />
                                     <DataGridTextColumn Header="Type" Binding="{Binding type_facturation}" Width="110" />
@@ -248,7 +279,7 @@
                                     <DataGridTextColumn Header="Statut" Binding="{Binding statut}" Width="90" />
                                 </DataGrid.Columns>
                             </DataGrid>
-                            <StackPanel Grid.Column="1">
+                            <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1">
                                 <TextBlock Text="Nouvelle commande" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
                                 <Label Content="Client *" />
                                 <ComboBox x:Name="CmbCommandeClient" DisplayMemberPath="affichage" />
@@ -266,6 +297,14 @@
                                 <TextBox x:Name="TxtCommandeMontant" />
                                 <Button x:Name="BtnCommandeCreer" Content="Créer la commande" Background="#27AE60" Foreground="White" Margin="0,12,0,4" HorizontalAlignment="Left" />
                                 <TextBlock Text="L'échéancier est généré automatiquement." FontStyle="Italic" TextWrapping="Wrap" Foreground="Gray" Margin="0,4,0,0" />
+
+                                <TextBlock Text="Commande sélectionnée" FontSize="16" FontWeight="Bold" Margin="0,20,0,8" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="BtnCommandeTerminer" Content="Terminée" Background="#27AE60" Foreground="White" />
+                                    <Button x:Name="BtnCommandeAnnuler" Content="Annulée" Background="#C0392B" Foreground="White" />
+                                    <Button x:Name="BtnCommandeReactiver" Content="Réactiver" />
+                                </StackPanel>
+                                <TextBlock Text="Une commande passe automatiquement à 'Terminée' quand toutes ses échéances sont payées." FontStyle="Italic" TextWrapping="Wrap" Foreground="Gray" Margin="0,8,0,0" />
                             </StackPanel>
                         </Grid>
                     </TabItem>

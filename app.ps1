@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.6.0'
+$AppVersion = '1.7.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -377,6 +377,7 @@ $CmbDevisClient = Get-Ctrl 'CmbDevisClient'
 $TxtDevisPrestations = Get-Ctrl 'TxtDevisPrestations'
 $TxtDevisMontant = Get-Ctrl 'TxtDevisMontant'
 $TxtDevisDuree = Get-Ctrl 'TxtDevisDuree'
+$CmbDevisFiltre = Get-Ctrl 'CmbDevisFiltre'
 
 $GridCommandes = Get-Ctrl 'GridCommandes'
 $CmbCommandeClient = Get-Ctrl 'CmbCommandeClient'
@@ -384,6 +385,7 @@ $CmbCommandeType = Get-Ctrl 'CmbCommandeType'
 $DateCommandeDebut = Get-Ctrl 'DateCommandeDebut'
 $DateCommandeFin = Get-Ctrl 'DateCommandeFin'
 $TxtCommandeMontant = Get-Ctrl 'TxtCommandeMontant'
+$CmbCommandeFiltre = Get-Ctrl 'CmbCommandeFiltre'
 
 $GridEcheances = Get-Ctrl 'GridEcheances'
 $CmbEcheanceFiltre = Get-Ctrl 'CmbEcheanceFiltre'
@@ -398,9 +400,32 @@ function Update-CombosClients {
 
 function Update-VueAdministratif {
     Update-EcheancesRetard -DbPath $DbPath
-    $GridDevis.ItemsSource = @(Get-Devis -DbPath $DbPath)
-    $GridCommandes.ItemsSource = @(Get-Commandes -DbPath $DbPath)
+    Update-CommandesTermineesAuto -DbPath $DbPath
+    Update-VueDevis
+    Update-VueCommandes
     Update-VueEcheances
+}
+
+function Update-VueDevis {
+    $tous = @(Get-Devis -DbPath $DbPath)
+    $filtreItem = $CmbDevisFiltre.SelectedItem
+    $filtre = if ($filtreItem) { $filtreItem.Content } else { 'Tous' }
+    $mapStatuts = @{ 'En attente' = 'en_attente'; 'Accepté' = 'accepte'; 'Refusé' = 'refuse' }
+    if ($mapStatuts.ContainsKey($filtre)) {
+        $tous = $tous | Where-Object { $_.statut -eq $mapStatuts[$filtre] }
+    }
+    $GridDevis.ItemsSource = @($tous)
+}
+
+function Update-VueCommandes {
+    $toutes = @(Get-Commandes -DbPath $DbPath)
+    $filtreItem = $CmbCommandeFiltre.SelectedItem
+    $filtre = if ($filtreItem) { $filtreItem.Content } else { 'Toutes' }
+    $mapStatuts = @{ 'Active' = 'active'; 'Terminée' = 'terminee'; 'Annulée' = 'annulee' }
+    if ($mapStatuts.ContainsKey($filtre)) {
+        $toutes = $toutes | Where-Object { $_.statut -eq $mapStatuts[$filtre] }
+    }
+    $GridCommandes.ItemsSource = @($toutes)
 }
 
 function Update-VueEcheances {
@@ -413,6 +438,9 @@ function Update-VueEcheances {
     }
     $GridEcheances.ItemsSource = @($toutes)
 }
+
+$CmbDevisFiltre.Add_SelectionChanged({ Update-VueDevis })
+$CmbCommandeFiltre.Add_SelectionChanged({ Update-VueCommandes })
 
 (Get-Ctrl 'BtnDevisCreer').Add_Click({
     Invoke-Protege {
@@ -486,6 +514,31 @@ function Update-VueEcheances {
     }
 })
 
+(Get-Ctrl 'BtnCommandeTerminer').Add_Click({
+    Invoke-Protege {
+        $item = $GridCommandes.SelectedItem
+        if (-not $item) { Show-Erreur "Selectionne une commande."; return }
+        Set-CommandeStatut -DbPath $DbPath -Id ([int]$item.id) -Statut 'terminee'
+        Update-VueAdministratif
+    }
+})
+(Get-Ctrl 'BtnCommandeAnnuler').Add_Click({
+    Invoke-Protege {
+        $item = $GridCommandes.SelectedItem
+        if (-not $item) { Show-Erreur "Selectionne une commande."; return }
+        Set-CommandeStatut -DbPath $DbPath -Id ([int]$item.id) -Statut 'annulee'
+        Update-VueAdministratif
+    }
+})
+(Get-Ctrl 'BtnCommandeReactiver').Add_Click({
+    Invoke-Protege {
+        $item = $GridCommandes.SelectedItem
+        if (-not $item) { Show-Erreur "Selectionne une commande."; return }
+        Set-CommandeStatut -DbPath $DbPath -Id ([int]$item.id) -Statut 'active'
+        Update-VueAdministratif
+    }
+})
+
 $CmbEcheanceFiltre.Add_SelectionChanged({ Update-VueEcheances })
 
 (Get-Ctrl 'BtnEcheanceMarquerPayee').Add_Click({
@@ -493,7 +546,7 @@ $CmbEcheanceFiltre.Add_SelectionChanged({ Update-VueEcheances })
         $item = $GridEcheances.SelectedItem
         if (-not $item) { Show-Erreur "Selectionne une echeance."; return }
         Set-EcheanceStatut -DbPath $DbPath -Id ([int]$item.id) -Statut 'payee'
-        Update-VueEcheances
+        Update-VueAdministratif
     }
 })
 
