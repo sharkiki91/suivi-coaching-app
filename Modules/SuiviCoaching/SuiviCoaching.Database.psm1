@@ -144,9 +144,10 @@ CREATE TABLE IF NOT EXISTS seance_exercices (
     seance_id INTEGER NOT NULL REFERENCES seances(id) ON DELETE CASCADE,
     exercice_id INTEGER NOT NULL REFERENCES exercices(id),
     ordre INTEGER NOT NULL DEFAULT 0,
-    series INTEGER,
+    series TEXT,
     repetitions TEXT,
-    recuperation_s INTEGER,
+    charge TEXT,
+    recuperation_s TEXT,
     tempo TEXT,
     notes TEXT
 );
@@ -155,17 +156,21 @@ CREATE TABLE IF NOT EXISTS seances_realisees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     seance_id INTEGER NOT NULL REFERENCES seances(id),
     client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    date_realisation TEXT NOT NULL
+    date_realisation TEXT NOT NULL,
+    UNIQUE(seance_id, client_id, date_realisation)
 );
 
-CREATE TABLE IF NOT EXISTS series_realisees (
+CREATE TABLE IF NOT EXISTS exercices_realises (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     seance_realisee_id INTEGER NOT NULL REFERENCES seances_realisees(id) ON DELETE CASCADE,
     seance_exercice_id INTEGER NOT NULL REFERENCES seance_exercices(id),
-    numero_serie INTEGER NOT NULL,
-    reps_realisees INTEGER,
-    charge REAL,
-    notes TEXT
+    series TEXT,
+    repetitions TEXT,
+    charge TEXT,
+    recuperation_s TEXT,
+    tempo TEXT,
+    notes TEXT,
+    UNIQUE(seance_realisee_id, seance_exercice_id)
 );
 
 CREATE TABLE IF NOT EXISTS seance_modeles (
@@ -179,9 +184,10 @@ CREATE TABLE IF NOT EXISTS seance_modele_exercices (
     seance_modele_id INTEGER NOT NULL REFERENCES seance_modeles(id) ON DELETE CASCADE,
     exercice_id INTEGER NOT NULL REFERENCES exercices(id),
     ordre INTEGER NOT NULL DEFAULT 0,
-    series INTEGER,
+    series TEXT,
     repetitions TEXT,
-    recuperation_s INTEGER,
+    charge TEXT,
+    recuperation_s TEXT,
     tempo TEXT,
     notes TEXT
 );
@@ -280,6 +286,77 @@ CREATE TABLE IF NOT EXISTS parametres (
 "@
 
     Invoke-SqliteQuery -DataSource $DbPath -Query $schema
+
+    <#
+        Migration : "series" et "recuperation_s" passent de INTEGER a TEXT (pour accepter des
+        fourchettes type "3-4" ou "20-30"), et une colonne "charge" TEXT est ajoutee. Sur une
+        installation existante, ces tables ont deja ete creees avec l'ancien schema : "CREATE TABLE
+        IF NOT EXISTS" ne les modifie pas, et SQLite ne permet pas de changer le type d'une colonne
+        existante (ni "ADD COLUMN IF NOT EXISTS", absent avant la 3.35, alors que la version embarquee
+        est 3.8.x). Sans reconstruire la table, une colonne restee en affinite INTEGER tronquerait
+        silencieusement "3-4" en "3" au moment de l'ecriture. On recree donc la table au bon format en
+        recopiant les donnees existantes, uniquement si l'ancien schema est detecte (idempotent).
+    #>
+    function Convert-VersFourchettesEtCharge {
+        param([string] $Table, [string] $CreateTableSql, [string] $ColonnesACopier)
+        $colonnes = @(Invoke-SqliteQuery -DataSource $DbPath -Query "PRAGMA table_info($Table)")
+        $colonneSeries = $colonnes | Where-Object { $_.name -eq 'series' }
+        if (-not $colonneSeries -or $colonneSeries.type -ne 'INTEGER') { return }
+
+        $nomTemp = "${Table}_ancien"
+        Invoke-SqliteQuery -DataSource $DbPath -Query @"
+ALTER TABLE $Table RENAME TO $nomTemp;
+$CreateTableSql
+INSERT INTO $Table ($ColonnesACopier)
+SELECT $ColonnesACopier FROM $nomTemp;
+DROP TABLE $nomTemp;
+"@
+    }
+
+    Convert-VersFourchettesEtCharge -Table 'seance_exercices' -ColonnesACopier 'id, seance_id, exercice_id, ordre, series, repetitions, recuperation_s, tempo, notes' -CreateTableSql @"
+CREATE TABLE seance_exercices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    seance_id INTEGER NOT NULL REFERENCES seances(id) ON DELETE CASCADE,
+    exercice_id INTEGER NOT NULL REFERENCES exercices(id),
+    ordre INTEGER NOT NULL DEFAULT 0,
+    series TEXT,
+    repetitions TEXT,
+    charge TEXT,
+    recuperation_s TEXT,
+    tempo TEXT,
+    notes TEXT
+);
+"@
+
+    Convert-VersFourchettesEtCharge -Table 'seance_modele_exercices' -ColonnesACopier 'id, seance_modele_id, exercice_id, ordre, series, repetitions, recuperation_s, tempo, notes' -CreateTableSql @"
+CREATE TABLE seance_modele_exercices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    seance_modele_id INTEGER NOT NULL REFERENCES seance_modeles(id) ON DELETE CASCADE,
+    exercice_id INTEGER NOT NULL REFERENCES exercices(id),
+    ordre INTEGER NOT NULL DEFAULT 0,
+    series TEXT,
+    repetitions TEXT,
+    charge TEXT,
+    recuperation_s TEXT,
+    tempo TEXT,
+    notes TEXT
+);
+"@
+
+    Convert-VersFourchettesEtCharge -Table 'exercices_realises' -ColonnesACopier 'id, seance_realisee_id, seance_exercice_id, series, repetitions, recuperation_s, tempo, notes' -CreateTableSql @"
+CREATE TABLE exercices_realises (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    seance_realisee_id INTEGER NOT NULL REFERENCES seances_realisees(id) ON DELETE CASCADE,
+    seance_exercice_id INTEGER NOT NULL REFERENCES seance_exercices(id),
+    series TEXT,
+    repetitions TEXT,
+    charge TEXT,
+    recuperation_s TEXT,
+    tempo TEXT,
+    notes TEXT,
+    UNIQUE(seance_realisee_id, seance_exercice_id)
+);
+"@
 }
 
 function Backup-Database {

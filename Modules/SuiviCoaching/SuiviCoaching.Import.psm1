@@ -450,6 +450,46 @@ function Import-JournalAlimentaireDepuisFatSecret {
     return [pscustomobject]$resultat
 }
 
+function Import-SeanceRealiseeDepuisExcel {
+    <#
+        Importe une feuille de seance remplie par le client (generee par Export-FeuilleSeanceExcel).
+        Une ligne sans date de realisation, ou dont aucune valeur realisee n'est renseignee, est ignoree.
+        Reimporter un fichier deja traite met a jour les lignes existantes (meme seance + meme date)
+        plutot que de les dupliquer.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $ClientId,
+        [Parameter(Mandatory)] [string] $ExcelPath
+    )
+
+    $resultat = [ordered]@{ Importees = 0; IgnoreesSansDate = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
+    $lignes = @(Import-Excel -Path $ExcelPath)
+
+    foreach ($ligne in $lignes) {
+        $dateIso = ConvertTo-DateIso $ligne.'Date de realisation'
+        if (-not $dateIso) { $resultat.IgnoreesSansDate++; continue }
+
+        $tousVides = -not ($ligne.'Series realisees' -or $ligne.'Repetitions realisees' -or $ligne.'Charge realisee' -or $ligne.'Recup realisee (s)' -or $ligne.'Tempo realise' -or $ligne.Notes)
+        if ($tousVides) { continue }
+
+        try {
+            $seanceId = [int]$ligne.SeanceId
+            $seanceExerciceId = [int]$ligne.SeanceExerciceId
+            $seanceRealiseeId = Get-OuCreerSeanceRealisee -DbPath $DbPath -SeanceId $seanceId -ClientId $ClientId -DateRealisation $dateIso
+            Set-ExerciceRealise -DbPath $DbPath -SeanceRealiseeId $seanceRealiseeId -SeanceExerciceId $seanceExerciceId `
+                -Series (Get-TexteImportOuNull $ligne.'Series realisees') -Repetitions (Get-TexteImportOuNull $ligne.'Repetitions realisees') `
+                -Charge (Get-TexteImportOuNull $ligne.'Charge realisee') -RecuperationS (Get-TexteImportOuNull $ligne.'Recup realisee (s)') `
+                -Tempo (Get-TexteImportOuNull $ligne.'Tempo realise') -Notes (Get-TexteImportOuNull $ligne.Notes)
+            $resultat.Importees++
+        } catch {
+            $resultat.Erreurs.Add("Ligne '$($ligne.Exercice)' du $dateIso : $($_.Exception.Message)")
+        }
+    }
+    return [pscustomobject]$resultat
+}
+
 Export-ModuleMember -Function Import-BibliothequesDepuisExcel, Export-DonneesVersExcel, Get-EnTetesExcel, `
     Import-QuestionnaireDepuisExcel, Export-ModeleTrackingExcel, Import-TrackingDepuisExcel, `
-    Export-ModeleRoadmapExcel, Import-RoadmapDepuisExcel, Import-JournalAlimentaireDepuisFatSecret
+    Export-ModeleRoadmapExcel, Import-RoadmapDepuisExcel, Import-JournalAlimentaireDepuisFatSecret, `
+    Import-SeanceRealiseeDepuisExcel

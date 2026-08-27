@@ -115,6 +115,41 @@ UPDATE clients SET telephone = @Telephone, email = @Email, objectifs = @Objectif
     return $true
 }
 
+function Remove-Client {
+    <#
+        Supprime definitivement un client et TOUTES ses donnees dans l'application (devis, commandes et
+        echeances, questionnaires, complements recommandes, programmes/seances/exercices, seances
+        realisees, plans nutrition/types de jour/repas/aliments, roadmap, suivi quotidien, journal
+        alimentaire). Irreversible : appeler Backup-Database avant, cote appelant, si on veut pouvoir
+        revenir en arriere.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $Id
+    )
+    $query = @"
+DELETE FROM echeances WHERE commande_id IN (SELECT id FROM commandes WHERE client_id = @Id);
+DELETE FROM commandes WHERE client_id = @Id;
+DELETE FROM devis WHERE client_id = @Id;
+DELETE FROM questionnaires_reponses WHERE client_id = @Id;
+DELETE FROM complements_recommandations WHERE client_id = @Id;
+DELETE FROM exercices_realises WHERE seance_realisee_id IN (SELECT id FROM seances_realisees WHERE client_id = @Id);
+DELETE FROM seances_realisees WHERE client_id = @Id;
+DELETE FROM seance_exercices WHERE seance_id IN (SELECT id FROM seances WHERE programme_id IN (SELECT id FROM programmes WHERE client_id = @Id));
+DELETE FROM seances WHERE programme_id IN (SELECT id FROM programmes WHERE client_id = @Id);
+DELETE FROM programmes WHERE client_id = @Id;
+DELETE FROM repas_aliments WHERE repas_id IN (SELECT id FROM repas WHERE type_jour_id IN (SELECT id FROM types_jour WHERE plan_nutrition_id IN (SELECT id FROM plans_nutrition WHERE client_id = @Id)));
+DELETE FROM repas WHERE type_jour_id IN (SELECT id FROM types_jour WHERE plan_nutrition_id IN (SELECT id FROM plans_nutrition WHERE client_id = @Id));
+DELETE FROM types_jour WHERE plan_nutrition_id IN (SELECT id FROM plans_nutrition WHERE client_id = @Id);
+DELETE FROM plans_nutrition WHERE client_id = @Id;
+DELETE FROM roadmap_semaines WHERE client_id = @Id;
+DELETE FROM suivi_quotidien WHERE client_id = @Id;
+DELETE FROM journal_alimentaire WHERE client_id = @Id;
+DELETE FROM clients WHERE id = @Id;
+"@
+    Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{ Id = $Id }
+}
+
 function Set-ClientStatut {
     param(
         [Parameter(Mandatory)] [string] $DbPath,
@@ -125,4 +160,4 @@ function Set-ClientStatut {
     Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE clients SET statut = @Statut WHERE id = @Id" -SqlParameters @{ Statut = $Statut; Id = $Id }
 }
 
-Export-ModuleMember -Function Get-Clients, Get-Client, New-Client, Update-Client, Set-ClientChampsSiVide, Set-ClientStatut
+Export-ModuleMember -Function Get-Clients, Get-Client, New-Client, Update-Client, Remove-Client, Set-ClientChampsSiVide, Set-ClientStatut

@@ -6,6 +6,22 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.12.0] - 2026-08-27
+
+### Ajouté
+- Les champs séries, charge et récup d'un exercice (dans un programme et dans un modèle de séance) acceptent désormais des fourchettes libres, ex. "3-4" séries, "35-40 kg" charge, "20-30" secondes de récup, en plus des valeurs précises — pour donner une indication au client plutôt qu'un chiffre exact. Nouveau champ "Charge" (poids visé), absent jusqu'ici, ajouté sur les exercices du programme, des modèles de séance, de la feuille de séance (prévue/réalisée) et des séances réalisées ; répercuté dans l'export PDF, l'export Excel et l'export de la feuille de séance.
+
+## [1.11.0] - 2026-08-27
+
+### Ajouté
+- Écran Clients : bouton "Supprimer définitivement..." pour effacer complètement un client et toutes ses données (devis, commandes, échéances, programmes, séances réalisées, plans nutrition, roadmap, suivi quotidien, journal alimentaire, questionnaires...), utile pour nettoyer les fiches de test. Une sauvegarde de la base est créée automatiquement juste avant, au cas où. Action irréversible, distincte de "Archiver" qui reste la solution recommandée pour un client qui arrête le coaching (ses données restent consultables).
+
+## [1.10.0] - 2026-08-27
+
+### Ajouté
+- Écran Programmes : bouton "Exporter la feuille de séance..." — génère un Excel avec, pour chaque exercice de chaque séance du programme, les valeurs prévues en référence et des colonnes vides à remplir par le client (date, séries/répétitions/récup/tempo réellement faits, note).
+- Écran Suivi > nouvel onglet **Séances réalisées** : bouton pour réimporter la feuille remplie par le client, historique des séances réalisées par client (date, séance, programme), et détail exercice par exercice en cliquant sur une ligne. Réimporter un fichier déjà traité met à jour les données existantes au lieu de les dupliquer.
+
 ## [1.9.1] - 2026-08-27
 
 ### Corrigé

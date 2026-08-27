@@ -119,21 +119,22 @@ function New-SeanceExercice {
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $SeanceId,
         [Parameter(Mandatory)] [int] $ExerciceId,
-        [int] $Series,
+        [string] $Series,
         [string] $Repetitions,
-        [int] $RecuperationS,
+        [string] $Charge,
+        [string] $RecuperationS,
         [string] $Tempo,
         [string] $Notes
     )
     $ordreMax = (Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT COALESCE(MAX(ordre), -1) AS m FROM seance_exercices WHERE seance_id = @SeanceId" -SqlParameters @{ SeanceId = $SeanceId }).m
     $query = @"
-INSERT INTO seance_exercices (seance_id, exercice_id, ordre, series, repetitions, recuperation_s, tempo, notes)
-VALUES (@SeanceId, @ExerciceId, @Ordre, @Series, @Repetitions, @RecuperationS, @Tempo, @Notes);
+INSERT INTO seance_exercices (seance_id, exercice_id, ordre, series, repetitions, charge, recuperation_s, tempo, notes)
+VALUES (@SeanceId, @ExerciceId, @Ordre, @Series, @Repetitions, @Charge, @RecuperationS, @Tempo, @Notes);
 SELECT last_insert_rowid() AS id;
 "@
     (Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{
         SeanceId = $SeanceId; ExerciceId = $ExerciceId; Ordre = ($ordreMax + 1)
-        Series = $Series; Repetitions = $Repetitions; RecuperationS = $RecuperationS; Tempo = $Tempo; Notes = $Notes
+        Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Notes = $Notes
     }).id
 }
 
@@ -141,16 +142,17 @@ function Update-SeanceExercice {
     param(
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $Id,
-        [int] $Series,
+        [string] $Series,
         [string] $Repetitions,
-        [int] $RecuperationS,
+        [string] $Charge,
+        [string] $RecuperationS,
         [string] $Tempo,
         [string] $Notes
     )
     Invoke-SqliteQuery -DataSource $DbPath -Query @"
-UPDATE seance_exercices SET series = @Series, repetitions = @Repetitions, recuperation_s = @RecuperationS, tempo = @Tempo, notes = @Notes
+UPDATE seance_exercices SET series = @Series, repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS, tempo = @Tempo, notes = @Notes
 WHERE id = @Id
-"@ -SqlParameters @{ Id = $Id; Series = $Series; Repetitions = $Repetitions; RecuperationS = $RecuperationS; Tempo = $Tempo; Notes = $Notes }
+"@ -SqlParameters @{ Id = $Id; Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Notes = $Notes }
 }
 
 function Remove-SeanceExercice {

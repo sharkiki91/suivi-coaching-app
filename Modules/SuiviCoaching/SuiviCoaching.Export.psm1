@@ -108,7 +108,7 @@ WHERE p.id = @Id
             [void]$sb.Append("<p class='notes'>Aucun exercice dans cette seance.</p>")
             continue
         }
-        [void]$sb.Append("<table><tr><th>Image</th><th>Exercice</th><th>Muscle cible</th><th>Series</th><th>Repetitions</th><th>Recup</th><th>Tempo</th><th>Video</th><th>Notes</th></tr>")
+        [void]$sb.Append("<table><tr><th>Image</th><th>Exercice</th><th>Muscle cible</th><th>Series</th><th>Repetitions</th><th>Charge</th><th>Recup</th><th>Tempo</th><th>Video</th><th>Notes</th></tr>")
         foreach ($e in $exercices) {
             $recup = if ($e.recuperation_s) { "$($e.recuperation_s) s" } else { "" }
             $seriesTexte = if ($e.series) { [string]$e.series } else { '' }
@@ -122,7 +122,7 @@ WHERE p.id = @Id
                 $lienEncode = HtmlEncode $e.lien_video
                 $videoTd = "<a class='lien-video' href='$lienEncode'>&#9654; Video</a>"
             }
-            [void]$sb.Append("<tr><td>$imageTd</td><td>$(HtmlEncode $e.exercice_nom)</td><td>$(HtmlEncode $e.muscle_cible)</td><td>$(HtmlEncode $seriesTexte)</td><td>$(HtmlEncode $e.repetitions)</td><td>$(HtmlEncode $recup)</td><td>$(HtmlEncode $e.tempo)</td><td>$videoTd</td><td>$(HtmlEncode $e.notes)</td></tr>")
+            [void]$sb.Append("<tr><td>$imageTd</td><td>$(HtmlEncode $e.exercice_nom)</td><td>$(HtmlEncode $e.muscle_cible)</td><td>$(HtmlEncode $seriesTexte)</td><td>$(HtmlEncode $e.repetitions)</td><td>$(HtmlEncode $e.charge)</td><td>$(HtmlEncode $recup)</td><td>$(HtmlEncode $e.tempo)</td><td>$videoTd</td><td>$(HtmlEncode $e.notes)</td></tr>")
         }
         [void]$sb.Append("</table>")
     }
@@ -155,6 +155,7 @@ function Export-ProgrammeExcel {
                 'Muscle cible' = $e.muscle_cible
                 Series = $e.series
                 Repetitions = $e.repetitions
+                Charge = $e.charge
                 'Recup (s)' = $e.recuperation_s
                 Tempo = $e.tempo
                 'Lien video' = $e.lien_video
@@ -164,6 +165,48 @@ function Export-ProgrammeExcel {
     }
     if (Test-Path $Path) { Remove-Item $Path -Force }
     $lignes | Export-Excel -Path $Path -WorksheetName 'Programme' -AutoSize -TableStyle Medium2 -FreezeTopRow
+}
+
+function Export-FeuilleSeanceExcel {
+    <#
+        Genere un fichier Excel a remplir par le client : une ligne par exercice de chaque seance du
+        programme, avec les valeurs prevues en reference et des colonnes vides a completer (date de
+        realisation, series/repetitions/recup/tempo reellement faits, note). A reimporter ensuite via
+        Import-SeanceRealiseeDepuisExcel.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $ProgrammeId,
+        [Parameter(Mandatory)] [string] $Path
+    )
+
+    $seances = @(Get-Seances -DbPath $DbPath -ProgrammeId $ProgrammeId)
+    $lignes = New-Object System.Collections.Generic.List[object]
+    foreach ($s in $seances) {
+        $exercices = @(Get-SeanceExercices -DbPath $DbPath -SeanceId ([int]$s.id))
+        foreach ($e in $exercices) {
+            $lignes.Add([pscustomobject]@{
+                SeanceId = $s.id
+                Seance = $s.nom
+                SeanceExerciceId = $e.id
+                Exercice = $e.exercice_nom
+                'Series prevues' = $e.series
+                'Repetitions prevues' = $e.repetitions
+                'Charge prevue' = $e.charge
+                'Recup prevue (s)' = $e.recuperation_s
+                'Tempo prevu' = $e.tempo
+                'Date de realisation' = $null
+                'Series realisees' = $null
+                'Repetitions realisees' = $null
+                'Charge realisee' = $null
+                'Recup realisee (s)' = $null
+                'Tempo realise' = $null
+                Notes = $null
+            })
+        }
+    }
+    if (Test-Path $Path) { Remove-Item $Path -Force }
+    $lignes | Export-Excel -Path $Path -WorksheetName 'Feuille de seance' -AutoSize -TableStyle Medium2 -FreezeTopRow
 }
 
 # ================= NUTRITION =================
@@ -260,4 +303,5 @@ function Export-PlanNutritionExcel {
     $lignes | Export-Excel -Path $Path -WorksheetName 'Plan nutrition' -AutoSize -TableStyle Medium2 -FreezeTopRow
 }
 
-Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel
+Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, `
+    Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel
