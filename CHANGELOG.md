@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.9.1] - 2026-08-27
+
+### Corrigé
+- Sur certains écrans (Clients, Administratif, Bibliothèques...), le contenu qui dépassait la hauteur de la fenêtre était inaccessible : aucune barre de défilement n'existait nulle part dans l'application. C'était particulièrement visible sur un ordinateur portable en 1920×1080 avec la mise à l'échelle Windows activée (125 % ou 150 %), qui réduit la hauteur réellement disponible. L'application s'ouvre maintenant maximisée par défaut, et une barre de défilement verticale apparaît automatiquement dès qu'un écran dépasse la hauteur visible.
+
 ## [1.9.0] - 2026-08-27
 
 ### Ajouté
