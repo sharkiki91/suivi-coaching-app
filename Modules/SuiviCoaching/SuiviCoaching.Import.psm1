@@ -377,6 +377,79 @@ function Get-TexteImportOuNull {
     return $texte
 }
 
+function Convert-DoubleFatSecret {
+    <# Convertit un champ numerique FatSecret (virgule decimale, ou vide) en double. Retourne $null si vide/non convertible. #>
+    param($Valeur)
+    if ($null -eq $Valeur) { return $null }
+    $texte = ([string]$Valeur).Trim().Replace(',', '.')
+    if ([string]::IsNullOrWhiteSpace($texte)) { return $null }
+    $parsed = 0.0
+    if ([double]::TryParse($texte, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsed)) {
+        return $parsed
+    }
+    return $null
+}
+
+function Import-JournalAlimentaireDepuisFatSecret {
+    <#
+        Importe un export "Food Diary Report - Detailed Report" de FatSecret (CSV) pour un client.
+        Seuls les totaux quotidiens sont importes (pas le detail par repas/aliment). Une date deja
+        presente pour ce client est mise a jour plutot que dupliquee.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $ClientId,
+        [Parameter(Mandatory)] [string] $CsvPath
+    )
+
+    Add-Type -AssemblyName Microsoft.VisualBasic
+
+    $moisFr = @{
+        'janvier' = 1; 'février' = 2; 'mars' = 3; 'avril' = 4; 'mai' = 5; 'juin' = 6
+        'juillet' = 7; 'août' = 8; 'septembre' = 9; 'octobre' = 10; 'novembre' = 11; 'décembre' = 12
+    }
+    $regexJour = '^(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche),\s*(\S+)\s+(\d{1,2}),\s*(\d{4})$'
+
+    $resultat = [ordered]@{ Importes = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
+
+    $parser = New-Object Microsoft.VisualBasic.FileIO.TextFieldParser($CsvPath, [System.Text.Encoding]::UTF8)
+    $parser.TextFieldType = [Microsoft.VisualBasic.FileIO.FieldType]::Delimited
+    $parser.SetDelimiters(',')
+    $parser.HasFieldsEnclosedInQuotes = $true
+    try {
+        while (-not $parser.EndOfData) {
+            $champs = $parser.ReadFields()
+            if (-not $champs -or $champs.Count -lt 11) { continue }
+            $premier = $champs[0].Trim()
+            if ($premier -notmatch $regexJour) { continue }
+
+            $mois = $moisFr[$Matches[1].ToLower()]
+            if (-not $mois) { $resultat.Erreurs.Add("Mois non reconnu ('$($Matches[1])') sur la ligne : $premier"); continue }
+            try {
+                $date = (Get-Date -Year ([int]$Matches[3]) -Month $mois -Day ([int]$Matches[2])).ToString('yyyy-MM-dd')
+            } catch {
+                $resultat.Erreurs.Add("Date invalide sur la ligne : $premier"); continue
+            }
+
+            try {
+                Set-JournalAlimentaireJour -DbPath $DbPath -ClientId $ClientId -Date $date `
+                    -Kcal (Convert-DoubleFatSecret $champs[1]) -Lipides (Convert-DoubleFatSecret $champs[2]) `
+                    -LipidesSaturees (Convert-DoubleFatSecret $champs[3]) -Glucides (Convert-DoubleFatSecret $champs[4]) `
+                    -Fibres (Convert-DoubleFatSecret $champs[5]) -Sucres (Convert-DoubleFatSecret $champs[6]) `
+                    -Proteines (Convert-DoubleFatSecret $champs[7]) -SodiumMg (Convert-DoubleFatSecret $champs[8]) `
+                    -CholesterolMg (Convert-DoubleFatSecret $champs[9]) -PotassiumMg (Convert-DoubleFatSecret $champs[10])
+                $resultat.Importes++
+            } catch {
+                $resultat.Erreurs.Add("Jour $date : $($_.Exception.Message)")
+            }
+        }
+    } finally {
+        $parser.Close()
+    }
+
+    return [pscustomobject]$resultat
+}
+
 Export-ModuleMember -Function Import-BibliothequesDepuisExcel, Export-DonneesVersExcel, Get-EnTetesExcel, `
     Import-QuestionnaireDepuisExcel, Export-ModeleTrackingExcel, Import-TrackingDepuisExcel, `
-    Export-ModeleRoadmapExcel, Import-RoadmapDepuisExcel
+    Export-ModeleRoadmapExcel, Import-RoadmapDepuisExcel, Import-JournalAlimentaireDepuisFatSecret

@@ -892,6 +892,37 @@
                             </StackPanel>
                         </Grid>
                     </TabItem>
+
+                    <!-- Journal alimentaire -->
+                    <TabItem Header="Journal alimentaire">
+                        <Grid Margin="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                <Button x:Name="BtnImporterJournalAlimentaire" Content="Importer un journal FatSecret..." Background="#27AE60" Foreground="White" />
+                                <Button x:Name="BtnSupprimerJourJournal" Content="Supprimer la ligne sélectionnée" Background="#C0392B" Foreground="White" />
+                            </StackPanel>
+
+                            <DataGrid x:Name="GridJournalAlimentaire" Grid.Row="1">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Date" Binding="{Binding date}" Width="90" />
+                                    <DataGridTextColumn Header="Kcal" Binding="{Binding kcal}" Width="70" />
+                                    <DataGridTextColumn Header="Lipides (g)" Binding="{Binding lipides}" Width="80" />
+                                    <DataGridTextColumn Header="dont sat. (g)" Binding="{Binding lipides_satures}" Width="90" />
+                                    <DataGridTextColumn Header="Glucides (g)" Binding="{Binding glucides}" Width="90" />
+                                    <DataGridTextColumn Header="Fibres (g)" Binding="{Binding fibres}" Width="80" />
+                                    <DataGridTextColumn Header="Sucres (g)" Binding="{Binding sucres}" Width="80" />
+                                    <DataGridTextColumn Header="Protéines (g)" Binding="{Binding proteines}" Width="90" />
+                                    <DataGridTextColumn Header="Sodium (mg)" Binding="{Binding sodium_mg}" Width="90" />
+                                    <DataGridTextColumn Header="Cholestérol (mg)" Binding="{Binding cholesterol_mg}" Width="110" />
+                                    <DataGridTextColumn Header="Potassium (mg)" Binding="{Binding potassium_mg}" Width="100" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
                 </TabControl>
             </Grid>
 

@@ -256,6 +256,23 @@ CREATE TABLE IF NOT EXISTS suivi_quotidien (
 
 CREATE INDEX IF NOT EXISTS idx_suivi_client_date ON suivi_quotidien(client_id, date);
 
+CREATE TABLE IF NOT EXISTS journal_alimentaire (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    kcal REAL,
+    lipides REAL,
+    lipides_satures REAL,
+    glucides REAL,
+    fibres REAL,
+    sucres REAL,
+    proteines REAL,
+    sodium_mg REAL,
+    cholesterol_mg REAL,
+    potassium_mg REAL,
+    UNIQUE(client_id, date)
+);
+
 CREATE TABLE IF NOT EXISTS parametres (
     cle TEXT PRIMARY KEY,
     valeur TEXT

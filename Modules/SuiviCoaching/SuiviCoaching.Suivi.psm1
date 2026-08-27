@@ -135,5 +135,54 @@ function Remove-RoadmapSemaine {
     Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM roadmap_semaines WHERE id = @Id" -SqlParameters @{ Id = $Id }
 }
 
+# --- Journal alimentaire (import FatSecret) ---
+
+function Get-JournalAlimentaire {
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $ClientId
+    )
+    Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT * FROM journal_alimentaire WHERE client_id = @ClientId ORDER BY date" -SqlParameters @{ ClientId = $ClientId }
+}
+
+function Set-JournalAlimentaireJour {
+    <# Insere ou met a jour (upsert) la ligne de journal alimentaire d'un client pour une date donnee. #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $ClientId,
+        [Parameter(Mandatory)] [string] $Date,
+        [double] $Kcal,
+        [double] $Lipides,
+        [double] $LipidesSaturees,
+        [double] $Glucides,
+        [double] $Fibres,
+        [double] $Sucres,
+        [double] $Proteines,
+        [double] $SodiumMg,
+        [double] $CholesterolMg,
+        [double] $PotassiumMg
+    )
+    $query = @"
+INSERT OR REPLACE INTO journal_alimentaire (id, client_id, date, kcal, lipides, lipides_satures, glucides, fibres, sucres, proteines, sodium_mg, cholesterol_mg, potassium_mg)
+VALUES (
+    (SELECT id FROM journal_alimentaire WHERE client_id = @ClientId AND date = @Date),
+    @ClientId, @Date, @Kcal, @Lipides, @LipidesSaturees, @Glucides, @Fibres, @Sucres, @Proteines, @SodiumMg, @CholesterolMg, @PotassiumMg)
+"@
+    Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{
+        ClientId = $ClientId; Date = $Date; Kcal = $Kcal; Lipides = $Lipides; LipidesSaturees = $LipidesSaturees
+        Glucides = $Glucides; Fibres = $Fibres; Sucres = $Sucres; Proteines = $Proteines
+        SodiumMg = $SodiumMg; CholesterolMg = $CholesterolMg; PotassiumMg = $PotassiumMg
+    }
+}
+
+function Remove-JournalAlimentaireJour {
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $Id
+    )
+    Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM journal_alimentaire WHERE id = @Id" -SqlParameters @{ Id = $Id }
+}
+
 Export-ModuleMember -Function Get-SuiviQuotidien, Set-SuiviQuotidienJour, Remove-SuiviQuotidienJour, `
-    Get-RoadmapSemaines, New-RoadmapSemaine, Update-RoadmapSemaine, Remove-RoadmapSemaine
+    Get-RoadmapSemaines, New-RoadmapSemaine, Update-RoadmapSemaine, Remove-RoadmapSemaine, `
+    Get-JournalAlimentaire, Set-JournalAlimentaireJour, Remove-JournalAlimentaireJour

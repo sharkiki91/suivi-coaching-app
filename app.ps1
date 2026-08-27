@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.7.0'
+$AppVersion = '1.8.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -1298,6 +1298,9 @@ $TxtRoadmapEvenements = Get-Ctrl 'TxtRoadmapEvenements'
 $TxtRoadmapNotes = Get-Ctrl 'TxtRoadmapNotes'
 $Script:SelectedRoadmapId = $null
 
+# --- Journal alimentaire ---
+$GridJournalAlimentaire = Get-Ctrl 'GridJournalAlimentaire'
+
 function Update-VueSuiviClients {
     $clients = @(Get-Clients -DbPath $DbPath | ForEach-Object {
         [pscustomobject]@{ id = $_.id; affichage = "$($_.nom) $($_.prenom)" }
@@ -1311,6 +1314,7 @@ function Update-VueSuiviComplet {
     Update-VueQuestionnaires
     Update-VueSuiviQuotidien
     Update-VueRoadmap
+    Update-VueJournalAlimentaire
 }
 
 $CmbSuiviClient.Add_SelectionChanged({ Update-VueSuiviComplet })
@@ -1576,6 +1580,40 @@ $GridRoadmap.Add_SelectionChanged({
             if ($res.Erreurs.Count -gt 0) { $message += "`n`nRemarques :`n" + ($res.Erreurs -join "`n") }
             Show-Info $message "Import terminé"
             Update-VueRoadmap
+        }
+    }
+})
+
+# --- Journal alimentaire : logique ---
+
+function Update-VueJournalAlimentaire {
+    $GridJournalAlimentaire.ItemsSource = $null
+    if (-not $CmbSuiviClient.SelectedItem) { return }
+    $GridJournalAlimentaire.ItemsSource = @(Get-JournalAlimentaire -DbPath $DbPath -ClientId $CmbSuiviClient.SelectedItem.id)
+}
+
+(Get-Ctrl 'BtnImporterJournalAlimentaire').Add_Click({
+    Invoke-Protege {
+        if (-not $CmbSuiviClient.SelectedItem) { Show-Erreur "Sélectionne d'abord un client."; return }
+        $dialog = New-Object Microsoft.Win32.OpenFileDialog
+        $dialog.Filter = 'Fichier CSV (*.csv)|*.csv'
+        if ($dialog.ShowDialog()) {
+            $res = Import-JournalAlimentaireDepuisFatSecret -DbPath $DbPath -ClientId $CmbSuiviClient.SelectedItem.id -CsvPath $dialog.FileName
+            $message = "Jours importés : $($res.Importes)"
+            if ($res.Erreurs.Count -gt 0) { $message += "`n`nRemarques :`n" + ($res.Erreurs -join "`n") }
+            Show-Info $message "Import terminé"
+            Update-VueJournalAlimentaire
+        }
+    }
+})
+
+(Get-Ctrl 'BtnSupprimerJourJournal').Add_Click({
+    Invoke-Protege {
+        $item = $GridJournalAlimentaire.SelectedItem
+        if (-not $item) { Show-Erreur "Sélectionne une ligne."; return }
+        if (Show-Confirmation "Supprimer le journal du $($item.date) ?") {
+            Remove-JournalAlimentaireJour -DbPath $DbPath -Id ([int]$item.id)
+            Update-VueJournalAlimentaire
         }
     }
 })

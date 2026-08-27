@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.8.0] - 2026-08-27
+
+### Ajouté
+- Écran Suivi > nouvel onglet **Journal alimentaire** : importe directement l'export CSV "Food Diary Report - Detailed Report" de FatSecret envoyé par le client (calories, lipides, dont saturés, glucides, fibres, sucres, protéines, sodium, cholestérol, potassium par jour). Seuls les totaux quotidiens sont importés ; réimporter un fichier met à jour les jours déjà présents au lieu de les dupliquer.
+
 ## [1.7.0] - 2026-08-27
 
 ### Ajouté
