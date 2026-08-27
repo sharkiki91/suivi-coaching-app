@@ -149,7 +149,18 @@ CREATE TABLE IF NOT EXISTS seance_exercices (
     charge TEXT,
     recuperation_s TEXT,
     tempo TEXT,
+    variante TEXT,
     notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS seance_exercice_series (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    seance_exercice_id INTEGER NOT NULL REFERENCES seance_exercices(id) ON DELETE CASCADE,
+    numero_serie INTEGER NOT NULL,
+    repetitions TEXT,
+    charge TEXT,
+    recuperation_s TEXT,
+    UNIQUE(seance_exercice_id, numero_serie)
 );
 
 CREATE TABLE IF NOT EXISTS seances_realisees (
@@ -189,7 +200,18 @@ CREATE TABLE IF NOT EXISTS seance_modele_exercices (
     charge TEXT,
     recuperation_s TEXT,
     tempo TEXT,
+    variante TEXT,
     notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS seance_modele_exercice_series (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    seance_modele_exercice_id INTEGER NOT NULL REFERENCES seance_modele_exercices(id) ON DELETE CASCADE,
+    numero_serie INTEGER NOT NULL,
+    repetitions TEXT,
+    charge TEXT,
+    recuperation_s TEXT,
+    UNIQUE(seance_modele_exercice_id, numero_serie)
 );
 
 CREATE TABLE IF NOT EXISTS plans_nutrition (
@@ -357,6 +379,19 @@ CREATE TABLE exercices_realises (
     UNIQUE(seance_realisee_id, seance_exercice_id)
 );
 "@
+
+    <#
+        Migration : colonne "variante" ajoutee apres coup sur des tables qui existaient deja. Contrairement
+        a "series"/"recuperation_s" plus haut, il ne s'agit ici que d'ajouter une colonne (pas de changer
+        le type d'une colonne existante), donc un simple ALTER TABLE ADD COLUMN suffit (verifie via PRAGMA
+        pour rester idempotent, "ADD COLUMN IF NOT EXISTS" n'existant pas dans la version 3.8.x embarquee).
+    #>
+    foreach ($table in @('seance_exercices', 'seance_modele_exercices')) {
+        $colonnes = @(Invoke-SqliteQuery -DataSource $DbPath -Query "PRAGMA table_info($table)")
+        if ($colonnes -and -not ($colonnes | Where-Object { $_.name -eq 'variante' })) {
+            Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE $table ADD COLUMN variante TEXT"
+        }
+    }
 }
 
 function Backup-Database {

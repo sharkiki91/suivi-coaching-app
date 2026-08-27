@@ -6,6 +6,15 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.13.0] - 2026-08-27
+
+### Ajouté
+- Nouveau champ **Variante** sur les exercices d'un programme et d'un modèle de séance (ex. "unilatéral", "côté par côté") — repris dans l'export PDF, l'export Excel et la feuille de séance.
+- Nouveau bouton **"Détail par série..."** : permet, exercice par exercice, de renseigner des répétitions/charge/récup différentes pour chaque série (ex. pyramide 15/20/25 répétitions), en plus de la ligne globale qui reste le mode par défaut. Le détail par série se propage automatiquement quand un modèle de séance est utilisé pour créer une séance, et s'affiche de façon compacte dans les exports ("15 / 20 / 25") quand il est renseigné.
+
+### Corrigé
+- La suppression d'un programme ou d'une séance ne nettoyait plus les séances réalisées associées depuis le renommage de cette table (v1.10.0) — corrigé (laissait des lignes orphelines en base, sans impact visible pour l'instant car la fonctionnalité venait d'être introduite).
+
 ## [1.12.0] - 2026-08-27
 
 ### Ajouté

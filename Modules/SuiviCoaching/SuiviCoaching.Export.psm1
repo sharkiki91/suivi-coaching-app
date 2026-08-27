@@ -75,6 +75,27 @@ function Get-ImageDataUri {
     }
 }
 
+function Get-ValeurAvecDetailSeries {
+    <#
+        Retourne la valeur a afficher pour un champ (repetitions/charge/recuperation_s) d'un exercice :
+        si un detail par serie a ete saisi, une valeur par serie separee par " / " (ex. "15 / 20 / 25") ;
+        sinon la valeur globale saisie sur la ligne de l'exercice.
+    #>
+    param(
+        [array] $SeriesDetail,
+        [string] $ValeurGlobale,
+        [string] $NomChamp
+    )
+    if ($SeriesDetail -and $SeriesDetail.Count -gt 0) {
+        $valeurs = @($SeriesDetail | ForEach-Object { $_.$NomChamp })
+        $nonVides = @($valeurs | Where-Object { $_ })
+        if ($nonVides.Count -gt 0) {
+            return (($valeurs | ForEach-Object { if ($_) { [string]$_ } else { '-' } }) -join ' / ')
+        }
+    }
+    return $ValeurGlobale
+}
+
 # ================= PROGRAMMES =================
 
 function Export-ProgrammePdf {
@@ -108,10 +129,14 @@ WHERE p.id = @Id
             [void]$sb.Append("<p class='notes'>Aucun exercice dans cette seance.</p>")
             continue
         }
-        [void]$sb.Append("<table><tr><th>Image</th><th>Exercice</th><th>Muscle cible</th><th>Series</th><th>Repetitions</th><th>Charge</th><th>Recup</th><th>Tempo</th><th>Video</th><th>Notes</th></tr>")
+        [void]$sb.Append("<table><tr><th>Image</th><th>Exercice</th><th>Variante</th><th>Muscle cible</th><th>Series</th><th>Repetitions</th><th>Charge</th><th>Recup</th><th>Tempo</th><th>Video</th><th>Notes</th></tr>")
         foreach ($e in $exercices) {
-            $recup = if ($e.recuperation_s) { "$($e.recuperation_s) s" } else { "" }
-            $seriesTexte = if ($e.series) { [string]$e.series } else { '' }
+            $detailSeries = @(Get-SeanceExerciceSeries -DbPath $DbPath -SeanceExerciceId ([int]$e.id))
+            $repetitionsAffichees = Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.repetitions -NomChamp 'repetitions'
+            $chargeAffichee = Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.charge -NomChamp 'charge'
+            $recupAffichee = Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.recuperation_s -NomChamp 'recuperation_s'
+            $recup = if ($recupAffichee) { "$recupAffichee s" } else { "" }
+            $seriesTexte = if ($detailSeries.Count -gt 0) { [string]$detailSeries.Count } elseif ($e.series) { [string]$e.series } else { '' }
             $imageTd = ''
             if ($e.image_path) {
                 $dataUri = Get-ImageDataUri -Path (Join-Path $dossierData $e.image_path)
@@ -122,7 +147,7 @@ WHERE p.id = @Id
                 $lienEncode = HtmlEncode $e.lien_video
                 $videoTd = "<a class='lien-video' href='$lienEncode'>&#9654; Video</a>"
             }
-            [void]$sb.Append("<tr><td>$imageTd</td><td>$(HtmlEncode $e.exercice_nom)</td><td>$(HtmlEncode $e.muscle_cible)</td><td>$(HtmlEncode $seriesTexte)</td><td>$(HtmlEncode $e.repetitions)</td><td>$(HtmlEncode $e.charge)</td><td>$(HtmlEncode $recup)</td><td>$(HtmlEncode $e.tempo)</td><td>$videoTd</td><td>$(HtmlEncode $e.notes)</td></tr>")
+            [void]$sb.Append("<tr><td>$imageTd</td><td>$(HtmlEncode $e.exercice_nom)</td><td>$(HtmlEncode $e.variante)</td><td>$(HtmlEncode $e.muscle_cible)</td><td>$(HtmlEncode $seriesTexte)</td><td>$(HtmlEncode $repetitionsAffichees)</td><td>$(HtmlEncode $chargeAffichee)</td><td>$(HtmlEncode $recup)</td><td>$(HtmlEncode $e.tempo)</td><td>$videoTd</td><td>$(HtmlEncode $e.notes)</td></tr>")
         }
         [void]$sb.Append("</table>")
     }
@@ -149,14 +174,17 @@ function Export-ProgrammeExcel {
     foreach ($s in $seances) {
         $exercices = @(Get-SeanceExercices -DbPath $DbPath -SeanceId ([int]$s.id))
         foreach ($e in $exercices) {
+            $detailSeries = @(Get-SeanceExerciceSeries -DbPath $DbPath -SeanceExerciceId ([int]$e.id))
+            $nbSeries = if ($detailSeries.Count -gt 0) { $detailSeries.Count } else { $e.series }
             $lignes.Add([pscustomobject]@{
                 Seance = $s.nom
                 Exercice = $e.exercice_nom
+                Variante = $e.variante
                 'Muscle cible' = $e.muscle_cible
-                Series = $e.series
-                Repetitions = $e.repetitions
-                Charge = $e.charge
-                'Recup (s)' = $e.recuperation_s
+                Series = $nbSeries
+                Repetitions = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.repetitions -NomChamp 'repetitions')
+                Charge = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.charge -NomChamp 'charge')
+                'Recup (s)' = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.recuperation_s -NomChamp 'recuperation_s')
                 Tempo = $e.tempo
                 'Lien video' = $e.lien_video
                 Notes = $e.notes
@@ -185,15 +213,18 @@ function Export-FeuilleSeanceExcel {
     foreach ($s in $seances) {
         $exercices = @(Get-SeanceExercices -DbPath $DbPath -SeanceId ([int]$s.id))
         foreach ($e in $exercices) {
+            $detailSeries = @(Get-SeanceExerciceSeries -DbPath $DbPath -SeanceExerciceId ([int]$e.id))
+            $nbSeries = if ($detailSeries.Count -gt 0) { $detailSeries.Count } else { $e.series }
             $lignes.Add([pscustomobject]@{
                 SeanceId = $s.id
                 Seance = $s.nom
                 SeanceExerciceId = $e.id
                 Exercice = $e.exercice_nom
-                'Series prevues' = $e.series
-                'Repetitions prevues' = $e.repetitions
-                'Charge prevue' = $e.charge
-                'Recup prevue (s)' = $e.recuperation_s
+                'Variante prevue' = $e.variante
+                'Series prevues' = $nbSeries
+                'Repetitions prevues' = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.repetitions -NomChamp 'repetitions')
+                'Charge prevue' = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.charge -NomChamp 'charge')
+                'Recup prevue (s)' = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.recuperation_s -NomChamp 'recuperation_s')
                 'Tempo prevu' = $e.tempo
                 'Date de realisation' = $null
                 'Series realisees' = $null

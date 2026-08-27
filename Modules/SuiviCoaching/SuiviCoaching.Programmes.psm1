@@ -26,14 +26,15 @@ SELECT last_insert_rowid() AS id;
 }
 
 function Remove-Programme {
-    <# Supprime le programme et tout son contenu (seances, exercices de seance, seances realisees, series). #>
+    <# Supprime le programme et tout son contenu (seances, exercices de seance, series par exercice, seances realisees). #>
     param(
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $Id
     )
     $query = @"
-DELETE FROM series_realisees WHERE seance_realisee_id IN (SELECT id FROM seances_realisees WHERE seance_id IN (SELECT id FROM seances WHERE programme_id = @Id));
+DELETE FROM exercices_realises WHERE seance_realisee_id IN (SELECT id FROM seances_realisees WHERE seance_id IN (SELECT id FROM seances WHERE programme_id = @Id));
 DELETE FROM seances_realisees WHERE seance_id IN (SELECT id FROM seances WHERE programme_id = @Id);
+DELETE FROM seance_exercice_series WHERE seance_exercice_id IN (SELECT id FROM seance_exercices WHERE seance_id IN (SELECT id FROM seances WHERE programme_id = @Id));
 DELETE FROM seance_exercices WHERE seance_id IN (SELECT id FROM seances WHERE programme_id = @Id);
 DELETE FROM seances WHERE programme_id = @Id;
 DELETE FROM programmes WHERE id = @Id;
@@ -71,8 +72,9 @@ function Remove-Seance {
         [Parameter(Mandatory)] [int] $Id
     )
     $query = @"
-DELETE FROM series_realisees WHERE seance_realisee_id IN (SELECT id FROM seances_realisees WHERE seance_id = @Id);
+DELETE FROM exercices_realises WHERE seance_realisee_id IN (SELECT id FROM seances_realisees WHERE seance_id = @Id);
 DELETE FROM seances_realisees WHERE seance_id = @Id;
+DELETE FROM seance_exercice_series WHERE seance_exercice_id IN (SELECT id FROM seance_exercices WHERE seance_id = @Id);
 DELETE FROM seance_exercices WHERE seance_id = @Id;
 DELETE FROM seances WHERE id = @Id;
 "@
@@ -124,17 +126,18 @@ function New-SeanceExercice {
         [string] $Charge,
         [string] $RecuperationS,
         [string] $Tempo,
+        [string] $Variante,
         [string] $Notes
     )
     $ordreMax = (Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT COALESCE(MAX(ordre), -1) AS m FROM seance_exercices WHERE seance_id = @SeanceId" -SqlParameters @{ SeanceId = $SeanceId }).m
     $query = @"
-INSERT INTO seance_exercices (seance_id, exercice_id, ordre, series, repetitions, charge, recuperation_s, tempo, notes)
-VALUES (@SeanceId, @ExerciceId, @Ordre, @Series, @Repetitions, @Charge, @RecuperationS, @Tempo, @Notes);
+INSERT INTO seance_exercices (seance_id, exercice_id, ordre, series, repetitions, charge, recuperation_s, tempo, variante, notes)
+VALUES (@SeanceId, @ExerciceId, @Ordre, @Series, @Repetitions, @Charge, @RecuperationS, @Tempo, @Variante, @Notes);
 SELECT last_insert_rowid() AS id;
 "@
     (Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{
         SeanceId = $SeanceId; ExerciceId = $ExerciceId; Ordre = ($ordreMax + 1)
-        Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Notes = $Notes
+        Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Variante = $Variante; Notes = $Notes
     }).id
 }
 
@@ -147,12 +150,13 @@ function Update-SeanceExercice {
         [string] $Charge,
         [string] $RecuperationS,
         [string] $Tempo,
+        [string] $Variante,
         [string] $Notes
     )
     Invoke-SqliteQuery -DataSource $DbPath -Query @"
-UPDATE seance_exercices SET series = @Series, repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS, tempo = @Tempo, notes = @Notes
+UPDATE seance_exercices SET series = @Series, repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS, tempo = @Tempo, variante = @Variante, notes = @Notes
 WHERE id = @Id
-"@ -SqlParameters @{ Id = $Id; Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Notes = $Notes }
+"@ -SqlParameters @{ Id = $Id; Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Variante = $Variante; Notes = $Notes }
 }
 
 function Remove-SeanceExercice {
@@ -160,9 +164,69 @@ function Remove-SeanceExercice {
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $Id
     )
-    Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM seance_exercices WHERE id = @Id" -SqlParameters @{ Id = $Id }
+    $query = @"
+DELETE FROM seance_exercice_series WHERE seance_exercice_id = @Id;
+DELETE FROM seance_exercices WHERE id = @Id;
+"@
+    Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{ Id = $Id }
+}
+
+# --- Detail par serie d'un exercice de seance (optionnel, pour les schemas type pyramide) ---
+
+function Get-SeanceExerciceSeries {
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $SeanceExerciceId
+    )
+    Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT * FROM seance_exercice_series WHERE seance_exercice_id = @Id ORDER BY numero_serie" -SqlParameters @{ Id = $SeanceExerciceId }
+}
+
+function New-SeanceExerciceSerie {
+    <# Ajoute une serie a la fin (numero_serie = MAX + 1). #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $SeanceExerciceId,
+        [string] $Repetitions,
+        [string] $Charge,
+        [string] $RecuperationS
+    )
+    $numeroMax = (Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT COALESCE(MAX(numero_serie), 0) AS m FROM seance_exercice_series WHERE seance_exercice_id = @Id" -SqlParameters @{ Id = $SeanceExerciceId }).m
+    $query = @"
+INSERT INTO seance_exercice_series (seance_exercice_id, numero_serie, repetitions, charge, recuperation_s)
+VALUES (@SeanceExerciceId, @NumeroSerie, @Repetitions, @Charge, @RecuperationS);
+SELECT last_insert_rowid() AS id;
+"@
+    (Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{
+        SeanceExerciceId = $SeanceExerciceId; NumeroSerie = ($numeroMax + 1); Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS
+    }).id
+}
+
+function Update-SeanceExerciceSerie {
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $Id,
+        [string] $Repetitions,
+        [string] $Charge,
+        [string] $RecuperationS
+    )
+    Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE seance_exercice_series SET repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS WHERE id = @Id" `
+        -SqlParameters @{ Id = $Id; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS }
+}
+
+function Remove-SeanceExerciceSerie {
+    <# Supprime la serie puis renumerote les suivantes (1..N sans trou) pour garder un affichage propre. #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $Id
+    )
+    $serie = Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT * FROM seance_exercice_series WHERE id = @Id" -SqlParameters @{ Id = $Id }
+    if (-not $serie) { return }
+    Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM seance_exercice_series WHERE id = @Id" -SqlParameters @{ Id = $Id }
+    Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE seance_exercice_series SET numero_serie = numero_serie - 1 WHERE seance_exercice_id = @SeanceExerciceId AND numero_serie > @NumeroSerie" `
+        -SqlParameters @{ SeanceExerciceId = $serie.seance_exercice_id; NumeroSerie = $serie.numero_serie }
 }
 
 Export-ModuleMember -Function Get-Programmes, New-Programme, Remove-Programme, `
     Get-Seances, New-Seance, Remove-Seance, Move-Seance, `
-    Get-SeanceExercices, New-SeanceExercice, Update-SeanceExercice, Remove-SeanceExercice
+    Get-SeanceExercices, New-SeanceExercice, Update-SeanceExercice, Remove-SeanceExercice, `
+    Get-SeanceExerciceSeries, New-SeanceExerciceSerie, Update-SeanceExerciceSerie, Remove-SeanceExerciceSerie
