@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.4.0] - 2026-08-27
+
+### Ajouté
+- Modèles de séance réutilisables (Bibliothèques > Modèles de séance) : créer une fois une séance type (ex. "Haut du corps", "Full body") avec sa liste d'exercices, puis l'insérer dans le programme de n'importe quel client via le nouveau bouton "Créer depuis un modèle..." sur l'écran Programmes, sans avoir à la reconstruire à chaque fois.
+
 ## [1.3.2] - 2026-08-26
 
 ### Ajouté

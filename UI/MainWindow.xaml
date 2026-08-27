@@ -453,6 +453,74 @@
                             </StackPanel>
                         </Grid>
                     </TabItem>
+
+                    <!-- Modeles de seance -->
+                    <TabItem Header="Modèles de séance">
+                        <Grid Margin="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="Modèles" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
+                                <ListBox x:Name="ListeModeles" Height="220" DisplayMemberPath="nom" />
+                                <Label Content="Nom *" />
+                                <TextBox x:Name="TxtModeleNom" />
+                                <Label Content="Notes" />
+                                <TextBox x:Name="TxtModeleNotes" Height="50" TextWrapping="Wrap" AcceptsReturn="True" />
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button x:Name="BtnModeleNouveau" Content="Nouveau" />
+                                    <Button x:Name="BtnModeleEnregistrer" Content="Enregistrer" Background="#27AE60" Foreground="White" />
+                                </StackPanel>
+                                <Button x:Name="BtnModeleSupprimer" Content="Supprimer" Background="#C0392B" Foreground="White" Margin="0,8,0,0" HorizontalAlignment="Left" />
+                            </StackPanel>
+
+                            <Grid Grid.Column="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <DataGrid x:Name="GridModeleExercices" Grid.Row="0" Margin="0,0,0,12">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Exercice" Binding="{Binding exercice_nom}" Width="180" />
+                                        <DataGridTextColumn Header="Muscle" Binding="{Binding muscle_cible}" Width="110" />
+                                        <DataGridTextColumn Header="Séries" Binding="{Binding series}" Width="60" />
+                                        <DataGridTextColumn Header="Répétitions" Binding="{Binding repetitions}" Width="90" />
+                                        <DataGridTextColumn Header="Récup (s)" Binding="{Binding recuperation_s}" Width="80" />
+                                        <DataGridTextColumn Header="Tempo" Binding="{Binding tempo}" Width="90" />
+                                        <DataGridTextColumn Header="Notes" Binding="{Binding notes}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+
+                                <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="1" Padding="12">
+                                    <StackPanel>
+                                        <TextBlock Text="Ajouter un exercice au modèle (Exercice / Séries / Répétitions / Récup s / Tempo / Notes)" FontWeight="Bold" Margin="0,0,0,8" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="80" />
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="80" />
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="CmbModeleExerciceAAjouter" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExASeries" Grid.Column="1" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExARepetitions" Grid.Column="2" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExARecup" Grid.Column="3" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExATempo" Grid.Column="4" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExANotes" Grid.Column="5" Margin="0,0,6,0" />
+                                            <Button x:Name="BtnModeleExerciceAjouter" Grid.Column="6" Content="Ajouter" Background="#27AE60" Foreground="White" />
+                                        </Grid>
+                                        <Button x:Name="BtnModeleExerciceSupprimer" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </TabItem>
                 </TabControl>
             </Grid>
 
@@ -494,6 +562,7 @@
                         <Label Content="Nouvelle séance" />
                         <TextBox x:Name="TxtNouvelleSeance" />
                         <Button x:Name="BtnSeanceAjouter" Content="Ajouter la séance" Background="#27AE60" Foreground="White" HorizontalAlignment="Left" Margin="0,4,0,0" />
+                        <Button x:Name="BtnSeanceDepuisModele" Content="Créer depuis un modèle..." Background="#2980B9" Foreground="White" HorizontalAlignment="Left" Margin="0,4,0,0" />
                     </StackPanel>
 
                     <Grid Grid.Column="1">

@@ -29,8 +29,8 @@ L'application se navigue depuis le menu à gauche :
   - *Devis* : crée un devis pour un client, puis marque-le "Accepté" ou "Refusé". Un devis accepté peut être transformé en commande.
   - *Commandes* : crée une commande (mensuelle, hebdomadaire ou paiement unique) avec un montant total. L'échéancier de paiement est généré automatiquement.
   - *Paiements / Échéances* : vue de toutes les échéances, avec filtre (en attente / en retard / payées) et bouton pour marquer une échéance comme payée.
-- **Bibliothèques** : tes listes réutilisables d'exercices, d'aliments (avec leurs valeurs nutritionnelles) et de compléments. Recherche, ajout, modification, suppression, et export en Excel.
-- **Programmes** : choisis un client, crée un programme, ajoute des séances (avec les flèches ▲▼ pour les réordonner), puis ajoute des exercices à chaque séance en piochant dans ta bibliothèque (séries, répétitions, récup, tempo, notes). Exporte le programme en PDF ou Excel pour l'envoyer au client.
+- **Bibliothèques** : tes listes réutilisables d'exercices, d'aliments (avec leurs valeurs nutritionnelles), de compléments et de **modèles de séance** (ex. "Haut du corps", "Full body"). Recherche, ajout, modification, suppression, et export en Excel.
+- **Programmes** : choisis un client, crée un programme, ajoute des séances (avec les flèches ▲▼ pour les réordonner) — soit vides, soit directement à partir d'un modèle de séance via "Créer depuis un modèle...", puis ajoute/ajuste des exercices à chaque séance en piochant dans ta bibliothèque (séries, répétitions, récup, tempo, notes). Exporte le programme en PDF ou Excel pour l'envoyer au client.
 - **Nutrition** : choisis un client, crée un plan, ajoute un ou plusieurs types de jour (ex. "Jour haut" / "Jour bas"), puis des repas dans chaque type de jour, puis des aliments dans chaque repas avec leur quantité — les kcal/macros et les totaux se calculent automatiquement. Exporte le plan en PDF ou Excel.
 - **Tableau de bord** : l'écran d'accueil — nombre de clients actifs, paiements en attente/retard, prochaines échéances, et clients sans bilan depuis 14 jours ou plus.
 - **Suivi** : choisis un client, puis :

@@ -168,6 +168,24 @@ CREATE TABLE IF NOT EXISTS series_realisees (
     notes TEXT
 );
 
+CREATE TABLE IF NOT EXISTS seance_modeles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL,
+    notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS seance_modele_exercices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    seance_modele_id INTEGER NOT NULL REFERENCES seance_modeles(id) ON DELETE CASCADE,
+    exercice_id INTEGER NOT NULL REFERENCES exercices(id),
+    ordre INTEGER NOT NULL DEFAULT 0,
+    series INTEGER,
+    repetitions TEXT,
+    recuperation_s INTEGER,
+    tempo TEXT,
+    notes TEXT
+);
+
 CREATE TABLE IF NOT EXISTS plans_nutrition (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,

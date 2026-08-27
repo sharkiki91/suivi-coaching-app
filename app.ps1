@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.3.2'
+$AppVersion = '1.4.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -34,6 +34,7 @@ try {
     Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Bibliotheques.psm1') -Force
     Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Import.psm1') -Force
     Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Programmes.psm1') -Force
+    Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.ModelesSeance.psm1') -Force
     Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Nutrition.psm1') -Force
     Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Export.psm1') -Force
     Import-Module (Join-Path $AppRoot 'Modules\SuiviCoaching\SuiviCoaching.Suivi.psm1') -Force
@@ -150,6 +151,40 @@ function Show-DialogNouvelElement {
             Nom = $txtNom.Text.Trim()
             DateDebut = if ($dateDebut.SelectedDate) { $dateDebut.SelectedDate.ToString('yyyy-MM-dd') } else { $null }
             Notes = if ($txtNotes.Text) { $txtNotes.Text.Trim() } else { $null }
+        }
+        $dlg.DialogResult = $true
+    })
+
+    if ($dlg.ShowDialog()) { return $Script:ResultatDialog }
+    return $null
+}
+
+function Show-DialogChoixModele {
+    <#
+        Ouvre la boite de dialogue de creation d'une seance a partir d'un modele.
+        Retourne un hashtable @{ SeanceModeleId; Nom } ou $null si annule.
+    #>
+    param([Parameter(Mandatory)] [array] $Modeles)
+
+    $dlg = Import-XamlWindow -Path (Join-Path $AppRoot 'UI\DialogChoixModele.xaml')
+    $dlg.Owner = $Window
+    $cmbModele = $dlg.FindName('CmbDialogModele')
+    $txtNom = $dlg.FindName('TxtDialogNomSeance')
+    $cmbModele.ItemsSource = $Modeles
+    if ($Modeles.Count -gt 0) { $cmbModele.SelectedIndex = 0 }
+    $cmbModele.Add_SelectionChanged({
+        if ($cmbModele.SelectedItem) { $txtNom.Text = [string]$cmbModele.SelectedItem.nom }
+    })
+    if ($Modeles.Count -gt 0) { $txtNom.Text = [string]$Modeles[0].nom }
+
+    $Script:ResultatDialog = $null
+    $dlg.FindName('BtnDialogAnnuler').Add_Click({ $dlg.DialogResult = $false })
+    $dlg.FindName('BtnDialogValider').Add_Click({
+        if (-not $cmbModele.SelectedItem) { Show-Erreur "Selectionne un modele."; return }
+        if ([string]::IsNullOrWhiteSpace($txtNom.Text)) { Show-Erreur "Le nom de la seance est obligatoire."; return }
+        $Script:ResultatDialog = @{
+            SeanceModeleId = $cmbModele.SelectedItem.id
+            Nom = $txtNom.Text.Trim()
         }
         $dlg.DialogResult = $true
     })
@@ -468,6 +503,7 @@ function Update-VueBibliotheques {
     Update-VueExercices
     Update-VueAliments
     Update-VueComplements
+    Update-VueModeles
 }
 
 # --- Exercices ---
@@ -685,6 +721,88 @@ $GridComplements.Add_SelectionChanged({
     }
 })
 
+# --- Modeles de seance ---
+$ListeModeles = Get-Ctrl 'ListeModeles'
+$TxtModeleNom = Get-Ctrl 'TxtModeleNom'
+$TxtModeleNotes = Get-Ctrl 'TxtModeleNotes'
+$GridModeleExercices = Get-Ctrl 'GridModeleExercices'
+$CmbModeleExerciceAAjouter = Get-Ctrl 'CmbModeleExerciceAAjouter'
+$TxtModExASeries = Get-Ctrl 'TxtModExASeries'
+$TxtModExARepetitions = Get-Ctrl 'TxtModExARepetitions'
+$TxtModExARecup = Get-Ctrl 'TxtModExARecup'
+$TxtModExATempo = Get-Ctrl 'TxtModExATempo'
+$TxtModExANotes = Get-Ctrl 'TxtModExANotes'
+$Script:SelectedModeleId = $null
+
+function Update-VueModeles {
+    $ListeModeles.ItemsSource = @(Get-SeanceModeles -DbPath $DbPath)
+    $CmbModeleExerciceAAjouter.ItemsSource = @(Get-Exercices -DbPath $DbPath | ForEach-Object {
+        [pscustomobject]@{ id = $_.id; affichage = "$($_.nom) ($($_.muscle_cible))" }
+    })
+    $GridModeleExercices.ItemsSource = $null
+}
+function Clear-FormModele {
+    $Script:SelectedModeleId = $null
+    $TxtModeleNom.Text = ''; $TxtModeleNotes.Text = ''
+    $ListeModeles.SelectedItem = $null
+    $GridModeleExercices.ItemsSource = $null
+}
+function Update-VueModeleExercices {
+    $GridModeleExercices.ItemsSource = $null
+    if (-not $ListeModeles.SelectedItem) { return }
+    $GridModeleExercices.ItemsSource = @(Get-SeanceModeleExercices -DbPath $DbPath -SeanceModeleId $ListeModeles.SelectedItem.id)
+}
+$ListeModeles.Add_SelectionChanged({
+    $item = $ListeModeles.SelectedItem
+    if ($null -eq $item) { return }
+    $Script:SelectedModeleId = [int]$item.id
+    $TxtModeleNom.Text = [string]$item.nom
+    $TxtModeleNotes.Text = [string]$item.notes
+    Update-VueModeleExercices
+})
+(Get-Ctrl 'BtnModeleNouveau').Add_Click({ Clear-FormModele })
+(Get-Ctrl 'BtnModeleEnregistrer').Add_Click({
+    Invoke-Protege {
+        if ([string]::IsNullOrWhiteSpace($TxtModeleNom.Text)) { Show-Erreur "Le nom est obligatoire."; return }
+        if ($Script:SelectedModeleId) {
+            Update-SeanceModele -DbPath $DbPath -Id $Script:SelectedModeleId -Nom $TxtModeleNom.Text.Trim() -Notes (Get-TexteOuNull $TxtModeleNotes.Text)
+        } else {
+            New-SeanceModele -DbPath $DbPath -Nom $TxtModeleNom.Text.Trim() -Notes (Get-TexteOuNull $TxtModeleNotes.Text) | Out-Null
+        }
+        Clear-FormModele
+        Update-VueModeles
+    }
+})
+(Get-Ctrl 'BtnModeleSupprimer').Add_Click({
+    Invoke-Protege {
+        if (-not $Script:SelectedModeleId) { Show-Erreur "Selectionne un modele."; return }
+        if (Show-Confirmation "Supprimer ce modele et ses exercices ?") {
+            Remove-SeanceModele -DbPath $DbPath -Id $Script:SelectedModeleId
+            Clear-FormModele
+            Update-VueModeles
+        }
+    }
+})
+(Get-Ctrl 'BtnModeleExerciceAjouter').Add_Click({
+    Invoke-Protege {
+        if (-not $ListeModeles.SelectedItem) { Show-Erreur "Selectionne d'abord un modele."; return }
+        if (-not $CmbModeleExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
+        New-SeanceModeleExercice -DbPath $DbPath -SeanceModeleId $ListeModeles.SelectedItem.id -ExerciceId $CmbModeleExerciceAAjouter.SelectedItem.id `
+            -Series (Get-IntOuNull $TxtModExASeries.Text) -Repetitions (Get-TexteOuNull $TxtModExARepetitions.Text) `
+            -RecuperationS (Get-IntOuNull $TxtModExARecup.Text) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text) | Out-Null
+        $TxtModExASeries.Text = ''; $TxtModExARepetitions.Text = ''; $TxtModExARecup.Text = ''; $TxtModExATempo.Text = ''; $TxtModExANotes.Text = ''
+        Update-VueModeleExercices
+    }
+})
+(Get-Ctrl 'BtnModeleExerciceSupprimer').Add_Click({
+    Invoke-Protege {
+        $item = $GridModeleExercices.SelectedItem
+        if (-not $item) { Show-Erreur "Selectionne un exercice dans le tableau."; return }
+        Remove-SeanceModeleExercice -DbPath $DbPath -Id ([int]$item.id)
+        Update-VueModeleExercices
+    }
+})
+
 # ============================== PROGRAMMES ==============================
 
 $CmbProgrammeClient = Get-Ctrl 'CmbProgrammeClient'
@@ -791,6 +909,18 @@ $ListeSeances.Add_SelectionChanged({ Update-VueSeanceExercices })
         if ([string]::IsNullOrWhiteSpace($TxtNouvelleSeance.Text)) { Show-Erreur "Indique un nom de seance."; return }
         New-Seance -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Nom $TxtNouvelleSeance.Text.Trim() | Out-Null
         $TxtNouvelleSeance.Text = ''
+        Update-VueSeances
+    }
+})
+
+(Get-Ctrl 'BtnSeanceDepuisModele').Add_Click({
+    Invoke-Protege {
+        if (-not $CmbProgrammeSelection.SelectedItem) { Show-Erreur "Selectionne d'abord un programme."; return }
+        $modeles = @(Get-SeanceModeles -DbPath $DbPath)
+        if ($modeles.Count -eq 0) { Show-Erreur "Aucun modele de seance disponible. Cree d'abord un modele dans Bibliotheques > Modeles de seance."; return }
+        $resultat = Show-DialogChoixModele -Modeles $modeles
+        if (-not $resultat) { return }
+        New-SeanceDepuisModele -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -SeanceModeleId $resultat.SeanceModeleId -Nom $resultat.Nom | Out-Null
         Update-VueSeances
     }
 })
