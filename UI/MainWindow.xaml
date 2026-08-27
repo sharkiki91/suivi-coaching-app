@@ -537,10 +537,10 @@
                                         <DataGridTextColumn Header="Exercice" Binding="{Binding exercice_nom}" Width="150" />
                                         <DataGridTextColumn Header="Variante" Binding="{Binding variante}" Width="90" />
                                         <DataGridTextColumn Header="Muscle" Binding="{Binding muscle_cible}" Width="90" />
-                                        <DataGridTextColumn Header="Séries" Binding="{Binding series}" Width="55" />
-                                        <DataGridTextColumn Header="Répétitions" Binding="{Binding repetitions}" Width="90" />
-                                        <DataGridTextColumn Header="Charge" Binding="{Binding charge}" Width="90" />
-                                        <DataGridTextColumn Header="Récup" Binding="{Binding recuperation_s}" Width="70" />
+                                        <DataGridTextColumn Header="Séries" Binding="{Binding nb_series_affichage}" Width="55" />
+                                        <DataGridTextColumn Header="Répétitions" Binding="{Binding repetitions_affichage}" Width="90" />
+                                        <DataGridTextColumn Header="Charge" Binding="{Binding charge_affichage}" Width="90" />
+                                        <DataGridTextColumn Header="Récup" Binding="{Binding recuperation_affichage}" Width="70" />
                                         <DataGridTextColumn Header="Tempo" Binding="{Binding tempo}" Width="80" />
                                         <DataGridTextColumn Header="Notes" Binding="{Binding notes}" Width="*" />
                                     </DataGrid.Columns>
@@ -551,6 +551,10 @@
                                         <TextBlock Text="Ajouter un exercice au modèle (sélectionne une ligne du tableau pour la modifier)" FontWeight="Bold" Margin="0,0,0,4" />
                                         <TextBlock Text="Les champs acceptent des fourchettes, ex. séries &quot;3-4&quot;, charge &quot;35-40 kg&quot;, récup &quot;20-30&quot; ; variante ex. &quot;unilatéral&quot;" FontStyle="Italic" Foreground="Gray" Margin="0,0,0,8" />
                                         <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="90" />
@@ -563,20 +567,28 @@
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <ComboBox x:Name="CmbModeleExerciceAAjouter" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
-                                            <TextBox x:Name="TxtModExAVariante" Grid.Column="1" Margin="0,0,6,0" />
-                                            <TextBox x:Name="TxtModExASeries" Grid.Column="2" Margin="0,0,6,0" />
-                                            <TextBox x:Name="TxtModExARepetitions" Grid.Column="3" Margin="0,0,6,0" />
-                                            <TextBox x:Name="TxtModExACharge" Grid.Column="4" Margin="0,0,6,0" />
-                                            <TextBox x:Name="TxtModExARecup" Grid.Column="5" Margin="0,0,6,0" />
-                                            <TextBox x:Name="TxtModExATempo" Grid.Column="6" Margin="0,0,6,0" />
-                                            <TextBox x:Name="TxtModExANotes" Grid.Column="7" Margin="0,0,6,0" />
-                                            <Button x:Name="BtnModeleExerciceNouveau" Grid.Column="8" Content="Nouveau" />
-                                            <Button x:Name="BtnModeleExerciceAjouter" Grid.Column="9" Content="Enregistrer" Background="#27AE60" Foreground="White" />
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Exercice" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Variante" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Séries" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                            <TextBlock Grid.Row="0" Grid.Column="3" Text="Répétitions" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                            <TextBlock Grid.Row="0" Grid.Column="4" Text="Charge" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                            <TextBlock Grid.Row="0" Grid.Column="5" Text="Récup (s)" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                            <TextBlock Grid.Row="0" Grid.Column="6" Text="Tempo" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                            <TextBlock Grid.Row="0" Grid.Column="7" Text="Notes" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                            <ComboBox x:Name="CmbModeleExerciceAAjouter" Grid.Row="1" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExAVariante" Grid.Row="1" Grid.Column="1" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExASeries" Grid.Row="1" Grid.Column="2" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExARepetitions" Grid.Row="1" Grid.Column="3" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExACharge" Grid.Row="1" Grid.Column="4" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExARecup" Grid.Row="1" Grid.Column="5" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExATempo" Grid.Row="1" Grid.Column="6" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtModExANotes" Grid.Row="1" Grid.Column="7" Margin="0,0,6,0" />
+                                            <Button x:Name="BtnModeleExerciceNouveau" Grid.Row="1" Grid.Column="8" Content="Nouveau" />
+                                            <Button x:Name="BtnModeleExerciceAjouter" Grid.Row="1" Grid.Column="9" Content="Enregistrer" Background="#27AE60" Foreground="White" />
                                         </Grid>
                                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                             <Button x:Name="BtnModeleExerciceSupprimer" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" />
-                                            <Button x:Name="BtnModeleExerciceDetailSeries" Content="Détail par série..." />
+                                            <CheckBox x:Name="ChkModExADetailSeries" Content="Détail par série (répétitions/charge/récup différents à chaque série)" VerticalAlignment="Center" Margin="12,0,0,0" />
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>
@@ -639,10 +651,10 @@
                                 <DataGridTextColumn Header="Exercice" Binding="{Binding exercice_nom}" Width="150" />
                                 <DataGridTextColumn Header="Variante" Binding="{Binding variante}" Width="90" />
                                 <DataGridTextColumn Header="Muscle" Binding="{Binding muscle_cible}" Width="90" />
-                                <DataGridTextColumn Header="Séries" Binding="{Binding series}" Width="55" />
-                                <DataGridTextColumn Header="Répétitions" Binding="{Binding repetitions}" Width="90" />
-                                <DataGridTextColumn Header="Charge" Binding="{Binding charge}" Width="90" />
-                                <DataGridTextColumn Header="Récup" Binding="{Binding recuperation_s}" Width="70" />
+                                <DataGridTextColumn Header="Séries" Binding="{Binding nb_series_affichage}" Width="55" />
+                                <DataGridTextColumn Header="Répétitions" Binding="{Binding repetitions_affichage}" Width="90" />
+                                <DataGridTextColumn Header="Charge" Binding="{Binding charge_affichage}" Width="90" />
+                                <DataGridTextColumn Header="Récup" Binding="{Binding recuperation_affichage}" Width="70" />
                                 <DataGridTextColumn Header="Tempo" Binding="{Binding tempo}" Width="80" />
                                 <DataGridTextColumn Header="Notes" Binding="{Binding notes}" Width="*" />
                             </DataGrid.Columns>
@@ -653,6 +665,10 @@
                                 <TextBlock x:Name="TxtExerciceFormTitre" Text="Ajouter un exercice à cette séance (sélectionne une ligne du tableau pour la modifier)" FontWeight="Bold" Margin="0,0,0,4" />
                                 <TextBlock Text="Les champs acceptent des fourchettes, ex. séries &quot;3-4&quot;, charge &quot;35-40 kg&quot;, récup &quot;20-30&quot; ; variante ex. &quot;unilatéral&quot;" FontStyle="Italic" Foreground="Gray" Margin="0,0,0,8" />
                                 <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="90" />
@@ -665,20 +681,28 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <ComboBox x:Name="CmbExerciceAAjouter" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
-                                    <TextBox x:Name="TxtExAVariante" Grid.Column="1" Margin="0,0,6,0" />
-                                    <TextBox x:Name="TxtExASeries" Grid.Column="2" Margin="0,0,6,0" />
-                                    <TextBox x:Name="TxtExARepetitions" Grid.Column="3" Margin="0,0,6,0" />
-                                    <TextBox x:Name="TxtExACharge" Grid.Column="4" Margin="0,0,6,0" />
-                                    <TextBox x:Name="TxtExARecup" Grid.Column="5" Margin="0,0,6,0" />
-                                    <TextBox x:Name="TxtExATempo" Grid.Column="6" Margin="0,0,6,0" />
-                                    <TextBox x:Name="TxtExANotes" Grid.Column="7" Margin="0,0,6,0" />
-                                    <Button x:Name="BtnExerciceSeanceNouveau" Grid.Column="8" Content="Nouveau" />
-                                    <Button x:Name="BtnExerciceAjouter" Grid.Column="9" Content="Enregistrer" Background="#27AE60" Foreground="White" />
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Exercice" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Variante" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Séries" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Répétitions" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                    <TextBlock Grid.Row="0" Grid.Column="4" Text="Charge" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                    <TextBlock Grid.Row="0" Grid.Column="5" Text="Récup (s)" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                    <TextBlock Grid.Row="0" Grid.Column="6" Text="Tempo" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                    <TextBlock Grid.Row="0" Grid.Column="7" Text="Notes" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                    <ComboBox x:Name="CmbExerciceAAjouter" Grid.Row="1" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
+                                    <TextBox x:Name="TxtExAVariante" Grid.Row="1" Grid.Column="1" Margin="0,0,6,0" />
+                                    <TextBox x:Name="TxtExASeries" Grid.Row="1" Grid.Column="2" Margin="0,0,6,0" />
+                                    <TextBox x:Name="TxtExARepetitions" Grid.Row="1" Grid.Column="3" Margin="0,0,6,0" />
+                                    <TextBox x:Name="TxtExACharge" Grid.Row="1" Grid.Column="4" Margin="0,0,6,0" />
+                                    <TextBox x:Name="TxtExARecup" Grid.Row="1" Grid.Column="5" Margin="0,0,6,0" />
+                                    <TextBox x:Name="TxtExATempo" Grid.Row="1" Grid.Column="6" Margin="0,0,6,0" />
+                                    <TextBox x:Name="TxtExANotes" Grid.Row="1" Grid.Column="7" Margin="0,0,6,0" />
+                                    <Button x:Name="BtnExerciceSeanceNouveau" Grid.Row="1" Grid.Column="8" Content="Nouveau" />
+                                    <Button x:Name="BtnExerciceAjouter" Grid.Row="1" Grid.Column="9" Content="Enregistrer" Background="#27AE60" Foreground="White" />
                                 </Grid>
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <Button x:Name="BtnExerciceSupprimerDeSeance" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" />
-                                    <Button x:Name="BtnExerciceDetailSeries" Content="Détail par série..." />
+                                    <CheckBox x:Name="ChkExADetailSeries" Content="Détail par série (répétitions/charge/récup différents à chaque série)" VerticalAlignment="Center" Margin="12,0,0,0" />
                                 </StackPanel>
                             </StackPanel>
                         </Border>

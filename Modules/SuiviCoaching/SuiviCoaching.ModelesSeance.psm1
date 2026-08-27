@@ -147,29 +147,13 @@ SELECT last_insert_rowid() AS id;
     }).id
 }
 
-function Update-SeanceModeleExerciceSerie {
+function Remove-SeanceModeleExerciceSeriesTout {
+    <# Supprime toutes les series d'un exercice de modele (utilise par la fenetre "Detail par serie" qui remplace tout a chaque validation). #>
     param(
         [Parameter(Mandatory)] [string] $DbPath,
-        [Parameter(Mandatory)] [int] $Id,
-        [string] $Repetitions,
-        [string] $Charge,
-        [string] $RecuperationS
+        [Parameter(Mandatory)] [int] $SeanceModeleExerciceId
     )
-    Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE seance_modele_exercice_series SET repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS WHERE id = @Id" `
-        -SqlParameters @{ Id = $Id; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS }
-}
-
-function Remove-SeanceModeleExerciceSerie {
-    <# Supprime la serie puis renumerote les suivantes (1..N sans trou) pour garder un affichage propre. #>
-    param(
-        [Parameter(Mandatory)] [string] $DbPath,
-        [Parameter(Mandatory)] [int] $Id
-    )
-    $serie = Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT * FROM seance_modele_exercice_series WHERE id = @Id" -SqlParameters @{ Id = $Id }
-    if (-not $serie) { return }
-    Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM seance_modele_exercice_series WHERE id = @Id" -SqlParameters @{ Id = $Id }
-    Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE seance_modele_exercice_series SET numero_serie = numero_serie - 1 WHERE seance_modele_exercice_id = @SeanceModeleExerciceId AND numero_serie > @NumeroSerie" `
-        -SqlParameters @{ SeanceModeleExerciceId = $serie.seance_modele_exercice_id; NumeroSerie = $serie.numero_serie }
+    Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM seance_modele_exercice_series WHERE seance_modele_exercice_id = @Id" -SqlParameters @{ Id = $SeanceModeleExerciceId }
 }
 
 # --- Utilisation d'un modele dans un programme ---
@@ -197,5 +181,5 @@ function New-SeanceDepuisModele {
 
 Export-ModuleMember -Function Get-SeanceModeles, New-SeanceModele, Update-SeanceModele, Remove-SeanceModele, `
     Get-SeanceModeleExercices, New-SeanceModeleExercice, Update-SeanceModeleExercice, Remove-SeanceModeleExercice, `
-    Get-SeanceModeleExerciceSeries, New-SeanceModeleExerciceSerie, Update-SeanceModeleExerciceSerie, Remove-SeanceModeleExerciceSerie, `
+    Get-SeanceModeleExerciceSeries, New-SeanceModeleExerciceSerie, Remove-SeanceModeleExerciceSeriesTout, `
     New-SeanceDepuisModele

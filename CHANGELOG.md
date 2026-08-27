@@ -6,6 +6,21 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.14.1] - 2026-08-27
+
+### Corrigé
+- Case "Détail par série" (Programmes et Modèles de séance) : cocher la case ne faisait rien et provoquait l'erreur "la propriété Count est introuvable" lorsqu'aucune série détaillée n'existait encore pour l'exercice. Corrigé.
+
+## [1.14.0] - 2026-08-27
+
+### Modifié
+- Refonte du détail par série (Programmes et Modèles de séance) pour le rendre plus intuitif : le bouton "Détail par série..." devient une case à cocher "Détail par série". La cocher ouvre directement une fenêtre pré-remplie avec autant de lignes que le nombre de séries déjà indiqué sur l'exercice, chacune reprenant ses valeurs actuelles (répétitions, charge, récup) — il suffit de modifier les séries qui doivent différer des autres, plus besoin de sélectionner puis valider chaque ligne une par une. Le tableau principal des exercices affiche désormais directement le détail par série ("15 / 20 / 25") dès qu'il est renseigné, sans avoir besoin d'exporter pour le voir.
+
+## [1.13.1] - 2026-08-27
+
+### Corrigé
+- Écran Programmes : la ligne pour ajouter/modifier un exercice n'affichait que des cases vides, sans indication de ce que chacune représentait. Une étiquette (Exercice, Variante, Séries, Répétitions, Charge, Récup, Tempo, Notes) apparaît désormais au-dessus de chaque champ — pareil dans l'onglet Modèles de séance et dans la fenêtre "Détail par série...".
+
 ## [1.13.0] - 2026-08-27
 
 ### Ajouté

@@ -201,32 +201,16 @@ SELECT last_insert_rowid() AS id;
     }).id
 }
 
-function Update-SeanceExerciceSerie {
+function Remove-SeanceExerciceSeriesTout {
+    <# Supprime toutes les series d'un exercice (utilise par la fenetre "Detail par serie" qui remplace tout a chaque validation). #>
     param(
         [Parameter(Mandatory)] [string] $DbPath,
-        [Parameter(Mandatory)] [int] $Id,
-        [string] $Repetitions,
-        [string] $Charge,
-        [string] $RecuperationS
+        [Parameter(Mandatory)] [int] $SeanceExerciceId
     )
-    Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE seance_exercice_series SET repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS WHERE id = @Id" `
-        -SqlParameters @{ Id = $Id; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS }
-}
-
-function Remove-SeanceExerciceSerie {
-    <# Supprime la serie puis renumerote les suivantes (1..N sans trou) pour garder un affichage propre. #>
-    param(
-        [Parameter(Mandatory)] [string] $DbPath,
-        [Parameter(Mandatory)] [int] $Id
-    )
-    $serie = Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT * FROM seance_exercice_series WHERE id = @Id" -SqlParameters @{ Id = $Id }
-    if (-not $serie) { return }
-    Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM seance_exercice_series WHERE id = @Id" -SqlParameters @{ Id = $Id }
-    Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE seance_exercice_series SET numero_serie = numero_serie - 1 WHERE seance_exercice_id = @SeanceExerciceId AND numero_serie > @NumeroSerie" `
-        -SqlParameters @{ SeanceExerciceId = $serie.seance_exercice_id; NumeroSerie = $serie.numero_serie }
+    Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM seance_exercice_series WHERE seance_exercice_id = @Id" -SqlParameters @{ Id = $SeanceExerciceId }
 }
 
 Export-ModuleMember -Function Get-Programmes, New-Programme, Remove-Programme, `
     Get-Seances, New-Seance, Remove-Seance, Move-Seance, `
     Get-SeanceExercices, New-SeanceExercice, Update-SeanceExercice, Remove-SeanceExercice, `
-    Get-SeanceExerciceSeries, New-SeanceExerciceSerie, Update-SeanceExerciceSerie, Remove-SeanceExerciceSerie
+    Get-SeanceExerciceSeries, New-SeanceExerciceSerie, Remove-SeanceExerciceSeriesTout

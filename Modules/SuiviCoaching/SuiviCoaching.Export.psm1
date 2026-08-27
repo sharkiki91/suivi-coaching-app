@@ -335,4 +335,4 @@ function Export-PlanNutritionExcel {
 }
 
 Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, `
-    Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel
+    Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries
