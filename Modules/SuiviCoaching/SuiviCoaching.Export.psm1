@@ -47,7 +47,7 @@ function Get-StyleHtmlBase {
     h2 { color: #2C3E50; border-bottom: 2px solid #2C3E50; padding-bottom: 4px; margin-top: 28px; }
     h3 { color: #27AE60; margin-bottom: 6px; }
     table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-    th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 13px; }
+    th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 13px; vertical-align: top; }
     th { background-color: #2C3E50; color: white; }
     tr:nth-child(even) { background-color: #F5F7FA; }
     .totaux { font-weight: bold; background-color: #E8F6EF; }
@@ -96,6 +96,29 @@ function Get-ValeurAvecDetailSeries {
     return $ValeurGlobale
 }
 
+function Get-ValeurAvecDetailSeriesHtml {
+    <#
+        Variante HTML de Get-ValeurAvecDetailSeries pour l'export PDF : si un detail par serie a
+        ete saisi, une ligne par serie (separees par <br>, valeurs deja HTML-encodees) au lieu
+        d'une seule ligne separee par " / " ; sinon la valeur globale (encodee).
+    #>
+    param(
+        [array] $SeriesDetail,
+        [string] $ValeurGlobale,
+        [string] $NomChamp,
+        [string] $Suffixe = ''
+    )
+    if ($SeriesDetail -and $SeriesDetail.Count -gt 0) {
+        $valeurs = @($SeriesDetail | ForEach-Object { $_.$NomChamp })
+        $nonVides = @($valeurs | Where-Object { $_ })
+        if ($nonVides.Count -gt 0) {
+            return (($valeurs | ForEach-Object { if ($_) { "$(HtmlEncode ([string]$_))$Suffixe" } else { '-' } }) -join '<br>')
+        }
+    }
+    if (-not $ValeurGlobale) { return '' }
+    return "$(HtmlEncode $ValeurGlobale)$Suffixe"
+}
+
 # ================= PROGRAMMES =================
 
 function Export-ProgrammePdf {
@@ -132,10 +155,9 @@ WHERE p.id = @Id
         [void]$sb.Append("<table><tr><th>Image</th><th>Exercice</th><th>Variante</th><th>Muscle cible</th><th>Series</th><th>Repetitions</th><th>Charge</th><th>Recup</th><th>Tempo</th><th>Video</th><th>Notes</th></tr>")
         foreach ($e in $exercices) {
             $detailSeries = @(Get-SeanceExerciceSeries -DbPath $DbPath -SeanceExerciceId ([int]$e.id))
-            $repetitionsAffichees = Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.repetitions -NomChamp 'repetitions'
-            $chargeAffichee = Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.charge -NomChamp 'charge'
-            $recupAffichee = Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.recuperation_s -NomChamp 'recuperation_s'
-            $recup = if ($recupAffichee) { "$recupAffichee s" } else { "" }
+            $repetitionsAffichees = Get-ValeurAvecDetailSeriesHtml -SeriesDetail $detailSeries -ValeurGlobale $e.repetitions -NomChamp 'repetitions'
+            $chargeAffichee = Get-ValeurAvecDetailSeriesHtml -SeriesDetail $detailSeries -ValeurGlobale $e.charge -NomChamp 'charge'
+            $recupAffichee = Get-ValeurAvecDetailSeriesHtml -SeriesDetail $detailSeries -ValeurGlobale $e.recuperation_s -NomChamp 'recuperation_s' -Suffixe ' s'
             $seriesTexte = if ($detailSeries.Count -gt 0) { [string]$detailSeries.Count } elseif ($e.series) { [string]$e.series } else { '' }
             $imageTd = ''
             if ($e.image_path) {
@@ -147,7 +169,7 @@ WHERE p.id = @Id
                 $lienEncode = HtmlEncode $e.lien_video
                 $videoTd = "<a class='lien-video' href='$lienEncode'>&#9654; Video</a>"
             }
-            [void]$sb.Append("<tr><td>$imageTd</td><td>$(HtmlEncode $e.exercice_nom)</td><td>$(HtmlEncode $e.variante)</td><td>$(HtmlEncode $e.muscle_cible)</td><td>$(HtmlEncode $seriesTexte)</td><td>$(HtmlEncode $repetitionsAffichees)</td><td>$(HtmlEncode $chargeAffichee)</td><td>$(HtmlEncode $recup)</td><td>$(HtmlEncode $e.tempo)</td><td>$videoTd</td><td>$(HtmlEncode $e.notes)</td></tr>")
+            [void]$sb.Append("<tr><td>$imageTd</td><td>$(HtmlEncode $e.exercice_nom)</td><td>$(HtmlEncode $e.variante)</td><td>$(HtmlEncode $e.muscle_cible)</td><td>$(HtmlEncode $seriesTexte)</td><td>$repetitionsAffichees</td><td>$chargeAffichee</td><td>$recupAffichee</td><td>$(HtmlEncode $e.tempo)</td><td>$videoTd</td><td>$(HtmlEncode $e.notes)</td></tr>")
         }
         [void]$sb.Append("</table>")
     }
@@ -335,4 +357,4 @@ function Export-PlanNutritionExcel {
 }
 
 Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, `
-    Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries
+    Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries, Get-ValeurAvecDetailSeriesHtml
