@@ -49,7 +49,24 @@ function Get-Seances {
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $ProgrammeId
     )
-    Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT * FROM seances WHERE programme_id = @ProgrammeId ORDER BY ordre, id" -SqlParameters @{ ProgrammeId = $ProgrammeId }
+    $query = @"
+SELECT *,
+    nom || CASE WHEN jour_semaine IS NOT NULL AND jour_semaine <> '' THEN ' (' || jour_semaine || ')' ELSE '' END AS affichage
+FROM seances WHERE programme_id = @ProgrammeId ORDER BY ordre, id
+"@
+    Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{ ProgrammeId = $ProgrammeId }
+}
+
+function Update-SeanceJour {
+    <# Definit (ou retire, si Jour est vide/absent) le jour de la semaine associe a une seance. #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $Id,
+        [string] $Jour
+    )
+    $jourNormalise = if ([string]::IsNullOrWhiteSpace($Jour)) { $null } else { $Jour.Trim() }
+    Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE seances SET jour_semaine = @Jour WHERE id = @Id" `
+        -SqlParameters @{ Id = $Id; Jour = $jourNormalise }
 }
 
 function New-Seance {
@@ -211,6 +228,6 @@ function Remove-SeanceExerciceSeriesTout {
 }
 
 Export-ModuleMember -Function Get-Programmes, New-Programme, Remove-Programme, `
-    Get-Seances, New-Seance, Remove-Seance, Move-Seance, `
+    Get-Seances, New-Seance, Remove-Seance, Move-Seance, Update-SeanceJour, `
     Get-SeanceExercices, New-SeanceExercice, Update-SeanceExercice, Remove-SeanceExercice, `
     Get-SeanceExerciceSeries, New-SeanceExerciceSerie, Remove-SeanceExerciceSeriesTout

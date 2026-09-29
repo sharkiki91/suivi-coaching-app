@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.14.1'
+$AppVersion = '1.15.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -1109,6 +1109,7 @@ $ChkModExADetailSeries.Add_Click({
 $CmbProgrammeClient = Get-Ctrl 'CmbProgrammeClient'
 $CmbProgrammeSelection = Get-Ctrl 'CmbProgrammeSelection'
 $ListeSeances = Get-Ctrl 'ListeSeances'
+$CmbSeanceJour = Get-Ctrl 'CmbSeanceJour'
 $TxtNouvelleSeance = Get-Ctrl 'TxtNouvelleSeance'
 $GridSeanceExercices = Get-Ctrl 'GridSeanceExercices'
 $CmbExerciceAAjouter = Get-Ctrl 'CmbExerciceAAjouter'
@@ -1177,7 +1178,12 @@ function Update-VueSeanceExercices {
 
 $CmbProgrammeClient.Add_SelectionChanged({ Update-VueProgrammesPourClient })
 $CmbProgrammeSelection.Add_SelectionChanged({ Update-VueSeances })
-$ListeSeances.Add_SelectionChanged({ Update-VueSeanceExercices })
+$ListeSeances.Add_SelectionChanged({
+    Update-VueSeanceExercices
+    $item = $ListeSeances.SelectedItem
+    $jour = if ($item -and $item.jour_semaine) { [string]$item.jour_semaine } else { '(aucun)' }
+    $CmbSeanceJour.SelectedItem = $CmbSeanceJour.Items | Where-Object { $_.Content -eq $jour } | Select-Object -First 1
+})
 $GridSeanceExercices.Add_SelectionChanged({
     $item = $GridSeanceExercices.SelectedItem
     if ($null -eq $item) { return }
@@ -1270,6 +1276,16 @@ $GridSeanceExercices.Add_SelectionChanged({
         $resultat = Show-DialogChoixModele -Modeles $modeles
         if (-not $resultat) { return }
         New-SeanceDepuisModele -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -SeanceModeleId $resultat.SeanceModeleId -Nom $resultat.Nom | Out-Null
+        Update-VueSeances
+    }
+})
+
+(Get-Ctrl 'BtnSeanceJourEnregistrer').Add_Click({
+    Invoke-Protege {
+        if (-not $ListeSeances.SelectedItem) { Show-Erreur "Selectionne une seance."; return }
+        $jourChoisi = if ($CmbSeanceJour.SelectedItem) { [string]$CmbSeanceJour.SelectedItem.Content } else { '(aucun)' }
+        $jour = if ($jourChoisi -eq '(aucun)') { $null } else { $jourChoisi }
+        Update-SeanceJour -DbPath $DbPath -Id $ListeSeances.SelectedItem.id -Jour $jour
         Update-VueSeances
     }
 })

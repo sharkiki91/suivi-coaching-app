@@ -136,7 +136,8 @@ CREATE TABLE IF NOT EXISTS seances (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     programme_id INTEGER NOT NULL REFERENCES programmes(id) ON DELETE CASCADE,
     nom TEXT NOT NULL,
-    ordre INTEGER NOT NULL DEFAULT 0
+    ordre INTEGER NOT NULL DEFAULT 0,
+    jour_semaine TEXT
 );
 
 CREATE TABLE IF NOT EXISTS seance_exercices (
@@ -391,6 +392,12 @@ CREATE TABLE exercices_realises (
         if ($colonnes -and -not ($colonnes | Where-Object { $_.name -eq 'variante' })) {
             Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE $table ADD COLUMN variante TEXT"
         }
+    }
+
+    <# Migration : colonne "jour_semaine" ajoutee apres coup sur la table "seances". #>
+    $colonnesSeances = @(Invoke-SqliteQuery -DataSource $DbPath -Query "PRAGMA table_info(seances)")
+    if ($colonnesSeances -and -not ($colonnesSeances | Where-Object { $_.name -eq 'jour_semaine' })) {
+        Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE seances ADD COLUMN jour_semaine TEXT"
     }
 }
 

@@ -452,10 +452,13 @@ function Import-JournalAlimentaireDepuisFatSecret {
 
 function Import-SeanceRealiseeDepuisExcel {
     <#
-        Importe une feuille de seance remplie par le client (generee par Export-FeuilleSeanceExcel).
-        Une ligne sans date de realisation, ou dont aucune valeur realisee n'est renseignee, est ignoree.
-        Reimporter un fichier deja traite met a jour les lignes existantes (meme seance + meme date)
-        plutot que de les dupliquer.
+        Importe une feuille de seance remplie par le client (generee par Export-FeuilleSeanceExcel) :
+        une ligne par serie realisee, regroupees ici par exercice (SeanceExerciceId). La date de
+        realisation et les valeurs recup/tempo/notes n'ont besoin d'etre renseignees que sur une seule
+        ligne de serie de l'exercice ; les repetitions et charges realisees sont assemblees serie par
+        serie (ex. "15 / 20 / 25", "-" pour une serie non renseignee). Un exercice sans aucune date ou
+        sans aucune valeur realisee dans son groupe de lignes est ignore. Reimporter un fichier deja
+        traite met a jour les lignes existantes (meme seance + meme date) plutot que de les dupliquer.
     #>
     param(
         [Parameter(Mandatory)] [string] $DbPath,
@@ -465,25 +468,42 @@ function Import-SeanceRealiseeDepuisExcel {
 
     $resultat = [ordered]@{ Importees = 0; IgnoreesSansDate = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
     $lignes = @(Import-Excel -Path $ExcelPath)
+    $groupes = @($lignes | Group-Object -Property SeanceExerciceId)
 
-    foreach ($ligne in $lignes) {
-        $dateIso = ConvertTo-DateIso $ligne.'Date de realisation'
+    foreach ($groupe in $groupes) {
+        $lignesExercice = @($groupe.Group | Sort-Object { [int]$_.Serie })
+        $premiere = $lignesExercice[0]
+
+        $dateIso = $null
+        foreach ($l in $lignesExercice) {
+            $dateIso = ConvertTo-DateIso $l.'Date de realisation'
+            if ($dateIso) { break }
+        }
         if (-not $dateIso) { $resultat.IgnoreesSansDate++; continue }
 
-        $tousVides = -not ($ligne.'Series realisees' -or $ligne.'Repetitions realisees' -or $ligne.'Charge realisee' -or $ligne.'Recup realisee (s)' -or $ligne.'Tempo realise' -or $ligne.Notes)
+        $repsValeurs = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull $_.'Repetitions realisees' })
+        $chargeValeurs = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull $_.'Charge realisee' })
+        $recup = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull $_.'Recup realisee (s)' } | Where-Object { $_ }) | Select-Object -First 1
+        $tempo = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull $_.'Tempo realise' } | Where-Object { $_ }) | Select-Object -First 1
+        $notes = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull $_.Notes } | Where-Object { $_ }) | Select-Object -First 1
+
+        $repsRenseignees = @($repsValeurs | Where-Object { $_ })
+        $chargeRenseignees = @($chargeValeurs | Where-Object { $_ })
+        $tousVides = -not ($repsRenseignees.Count -gt 0 -or $chargeRenseignees.Count -gt 0 -or $recup -or $tempo -or $notes)
         if ($tousVides) { continue }
 
+        $reps = if ($repsRenseignees.Count -gt 0) { ($repsValeurs | ForEach-Object { if ($_) { $_ } else { '-' } }) -join ' / ' } else { $null }
+        $charge = if ($chargeRenseignees.Count -gt 0) { ($chargeValeurs | ForEach-Object { if ($_) { $_ } else { '-' } }) -join ' / ' } else { $null }
+
         try {
-            $seanceId = [int]$ligne.SeanceId
-            $seanceExerciceId = [int]$ligne.SeanceExerciceId
+            $seanceId = [int]$premiere.SeanceId
+            $seanceExerciceId = [int]$premiere.SeanceExerciceId
             $seanceRealiseeId = Get-OuCreerSeanceRealisee -DbPath $DbPath -SeanceId $seanceId -ClientId $ClientId -DateRealisation $dateIso
             Set-ExerciceRealise -DbPath $DbPath -SeanceRealiseeId $seanceRealiseeId -SeanceExerciceId $seanceExerciceId `
-                -Series (Get-TexteImportOuNull $ligne.'Series realisees') -Repetitions (Get-TexteImportOuNull $ligne.'Repetitions realisees') `
-                -Charge (Get-TexteImportOuNull $ligne.'Charge realisee') -RecuperationS (Get-TexteImportOuNull $ligne.'Recup realisee (s)') `
-                -Tempo (Get-TexteImportOuNull $ligne.'Tempo realise') -Notes (Get-TexteImportOuNull $ligne.Notes)
+                -Series ([string]$lignesExercice.Count) -Repetitions $reps -Charge $charge -RecuperationS $recup -Tempo $tempo -Notes $notes
             $resultat.Importees++
         } catch {
-            $resultat.Erreurs.Add("Ligne '$($ligne.Exercice)' du $dateIso : $($_.Exception.Message)")
+            $resultat.Erreurs.Add("Ligne '$($premiere.Exercice)' du $dateIso : $($_.Exception.Message)")
         }
     }
     return [pscustomobject]$resultat

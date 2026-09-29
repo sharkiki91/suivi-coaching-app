@@ -96,6 +96,29 @@ function Get-ValeurAvecDetailSeries {
     return $ValeurGlobale
 }
 
+function Get-NombreSeriesExport {
+    <#
+        Nombre de lignes (une par serie) a generer pour un exercice dans la feuille de seance a
+        remplir : le nombre de series avec detail si saisi, sinon la valeur haute du champ "series"
+        global (qui peut etre une fourchette, ex. "3-4"), sinon 1 par defaut.
+    #>
+    param([array] $SeriesDetail, [string] $SeriesGlobal)
+    if ($SeriesDetail -and $SeriesDetail.Count -gt 0) { return $SeriesDetail.Count }
+    if ($SeriesGlobal) {
+        $nombres = @([regex]::Matches($SeriesGlobal, '\d+') | ForEach-Object { [int]$_.Value })
+        if ($nombres.Count -gt 0) { return ($nombres | Measure-Object -Maximum).Maximum }
+    }
+    return 1
+}
+
+function Get-ValeurSeriePrevue {
+    <# Valeur prevue (repetitions/charge) pour une serie precise : le detail par serie s'il existe pour ce numero, sinon la valeur globale. #>
+    param([array] $SeriesDetail, [int] $NumeroSerie, [string] $ValeurGlobale, [string] $NomChamp)
+    $ligneSerie = $SeriesDetail | Where-Object { [int]$_.numero_serie -eq $NumeroSerie } | Select-Object -First 1
+    if ($ligneSerie -and $ligneSerie.$NomChamp) { return [string]$ligneSerie.$NomChamp }
+    return $ValeurGlobale
+}
+
 function Get-ValeurAvecDetailSeriesHtml {
     <#
         Variante HTML de Get-ValeurAvecDetailSeries pour l'export PDF : si un detail par serie a
@@ -144,6 +167,20 @@ WHERE p.id = @Id
     if ($prog.date_debut) { [void]$sb.Append(" &mdash; debut le $(HtmlEncode $prog.date_debut)") }
     [void]$sb.Append("</div>")
     if ($prog.notes) { [void]$sb.Append("<p class='notes'>$(HtmlEncode $prog.notes)</p>") }
+
+    $joursSemaine = @('Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche')
+    $seancesAvecJour = @($seances | Where-Object { $_.jour_semaine })
+    if ($seancesAvecJour.Count -gt 0) {
+        [void]$sb.Append("<h2>Semaine type</h2><table><tr>")
+        foreach ($jour in $joursSemaine) { [void]$sb.Append("<th>$jour</th>") }
+        [void]$sb.Append("</tr><tr>")
+        foreach ($jour in $joursSemaine) {
+            $seancesDuJour = @($seancesAvecJour | Where-Object { $_.jour_semaine -eq $jour })
+            $contenu = if ($seancesDuJour.Count -gt 0) { ($seancesDuJour | ForEach-Object { HtmlEncode $_.nom }) -join '<br>' } else { 'Repos' }
+            [void]$sb.Append("<td>$contenu</td>")
+        }
+        [void]$sb.Append("</tr></table>")
+    }
 
     foreach ($s in $seances) {
         [void]$sb.Append("<h2>$(HtmlEncode $s.nom)</h2>")
@@ -219,9 +256,11 @@ function Export-ProgrammeExcel {
 
 function Export-FeuilleSeanceExcel {
     <#
-        Genere un fichier Excel a remplir par le client : une ligne par exercice de chaque seance du
-        programme, avec les valeurs prevues en reference et des colonnes vides a completer (date de
-        realisation, series/repetitions/recup/tempo reellement faits, note). A reimporter ensuite via
+        Genere un fichier Excel a remplir par le client : une ligne par serie de chaque exercice de
+        chaque seance du programme (comme le tableau papier d'origine), avec les valeurs prevues en
+        reference et des colonnes vides a completer serie par serie (repetitions et charge reellement
+        faites). Date de realisation, recup/tempo realises et notes ne sont a remplir qu'une fois par
+        exercice (sur n'importe laquelle de ses lignes de serie). A reimporter ensuite via
         Import-SeanceRealiseeDepuisExcel.
     #>
     param(
@@ -236,26 +275,25 @@ function Export-FeuilleSeanceExcel {
         $exercices = @(Get-SeanceExercices -DbPath $DbPath -SeanceId ([int]$s.id))
         foreach ($e in $exercices) {
             $detailSeries = @(Get-SeanceExerciceSeries -DbPath $DbPath -SeanceExerciceId ([int]$e.id))
-            $nbSeries = if ($detailSeries.Count -gt 0) { $detailSeries.Count } else { $e.series }
-            $lignes.Add([pscustomobject]@{
-                SeanceId = $s.id
-                Seance = $s.nom
-                SeanceExerciceId = $e.id
-                Exercice = $e.exercice_nom
-                'Variante prevue' = $e.variante
-                'Series prevues' = $nbSeries
-                'Repetitions prevues' = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.repetitions -NomChamp 'repetitions')
-                'Charge prevue' = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.charge -NomChamp 'charge')
-                'Recup prevue (s)' = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.recuperation_s -NomChamp 'recuperation_s')
-                'Tempo prevu' = $e.tempo
-                'Date de realisation' = $null
-                'Series realisees' = $null
-                'Repetitions realisees' = $null
-                'Charge realisee' = $null
-                'Recup realisee (s)' = $null
-                'Tempo realise' = $null
-                Notes = $null
-            })
+            $nbSeries = Get-NombreSeriesExport -SeriesDetail $detailSeries -SeriesGlobal $e.series
+            for ($numeroSerie = 1; $numeroSerie -le $nbSeries; $numeroSerie++) {
+                $lignes.Add([pscustomobject]@{
+                    SeanceId = $s.id
+                    Seance = $s.nom
+                    SeanceExerciceId = $e.id
+                    Exercice = $e.exercice_nom
+                    'Variante prevue' = $e.variante
+                    Serie = $numeroSerie
+                    'Repetitions prevues' = (Get-ValeurSeriePrevue -SeriesDetail $detailSeries -NumeroSerie $numeroSerie -ValeurGlobale $e.repetitions -NomChamp 'repetitions')
+                    'Charge prevue' = (Get-ValeurSeriePrevue -SeriesDetail $detailSeries -NumeroSerie $numeroSerie -ValeurGlobale $e.charge -NomChamp 'charge')
+                    'Date de realisation' = $null
+                    'Repetitions realisees' = $null
+                    'Charge realisee' = $null
+                    'Recup realisee (s)' = $null
+                    'Tempo realise' = $null
+                    Notes = $null
+                })
+            }
         }
     }
     if (Test-Path $Path) { Remove-Item $Path -Force }

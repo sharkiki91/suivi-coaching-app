@@ -628,11 +628,25 @@
 
                     <StackPanel Grid.Column="0" Margin="0,0,12,0">
                         <TextBlock Text="Séances" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
-                        <ListBox x:Name="ListeSeances" Height="260" DisplayMemberPath="nom" />
+                        <ListBox x:Name="ListeSeances" Height="260" DisplayMemberPath="affichage" />
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
                             <Button x:Name="BtnSeanceMonter" Content="▲" MinWidth="36" />
                             <Button x:Name="BtnSeanceDescendre" Content="▼" MinWidth="36" />
                             <Button x:Name="BtnSeanceSupprimer" Content="Supprimer" Background="#C0392B" Foreground="White" />
+                        </StackPanel>
+                        <Label Content="Jour de la semaine (séance sélectionnée)" />
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox x:Name="CmbSeanceJour" Width="120">
+                                <ComboBoxItem Content="(aucun)" />
+                                <ComboBoxItem Content="Lundi" />
+                                <ComboBoxItem Content="Mardi" />
+                                <ComboBoxItem Content="Mercredi" />
+                                <ComboBoxItem Content="Jeudi" />
+                                <ComboBoxItem Content="Vendredi" />
+                                <ComboBoxItem Content="Samedi" />
+                                <ComboBoxItem Content="Dimanche" />
+                            </ComboBox>
+                            <Button x:Name="BtnSeanceJourEnregistrer" Content="Enregistrer" Margin="4,0,0,0" />
                         </StackPanel>
                         <Label Content="Nouvelle séance" />
                         <TextBox x:Name="TxtNouvelleSeance" />

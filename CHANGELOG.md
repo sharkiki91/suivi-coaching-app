@@ -6,6 +6,14 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.15.0] - 2026-09-29
+
+### Ajouté
+- Jour de la semaine sur les séances d'un programme (menu déroulant sous la liste des séances, écran Programmes) : quand au moins une séance en a un, un tableau récapitulatif "Semaine type" (Lundi → Dimanche, "Repos" les jours sans séance) apparaît en haut de l'export PDF du programme.
+
+### Modifié
+- L'export "Feuille de séance" (Excel à faire remplir par le client) génère désormais une ligne par série de chaque exercice, comme le tableau papier d'origine, avec des colonnes vides "Répétitions" et "Charge" à compléter série par série au lieu d'une seule ligne par exercice. La date de réalisation, la récup/tempo réalisés et la note ne sont à remplir qu'une fois par exercice (sur n'importe laquelle de ses lignes de série). Le réimport via Suivi > Séances réalisées assemble automatiquement les valeurs série par série (ex. "15 / 20 / 25").
+
 ## [1.14.1] - 2026-08-27
 
 ### Corrigé
