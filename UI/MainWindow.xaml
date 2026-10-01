@@ -336,6 +336,7 @@
                                     <DataGridTextColumn Header="Montant" Binding="{Binding montant}" Width="90" />
                                     <DataGridTextColumn Header="Statut" Binding="{Binding statut}" Width="110" />
                                     <DataGridTextColumn Header="Payée le" Binding="{Binding date_paiement}" Width="110" />
+                                    <DataGridTextColumn Header="Commande" Binding="{Binding commande_statut}" Width="100" />
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Grid>

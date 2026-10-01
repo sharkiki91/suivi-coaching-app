@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.15.1'
+$AppVersion = '1.15.2'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -72,7 +72,8 @@ function Get-TexteOuNull { param([string]$Texte)
 function Get-DoubleOuNull { param([string]$Texte)
     if ([string]::IsNullOrWhiteSpace($Texte)) { return $null }
     $valeur = 0.0
-    if ([double]::TryParse($Texte.Replace(',', '.'), [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$valeur)) {
+    # Les espaces (y compris insecables) servent de separateur de milliers en francais : "10 000" -> 10000
+    if ([double]::TryParse(($Texte -replace '\s', '').Replace(',', '.'), [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$valeur)) {
         return $valeur
     }
     throw "'$Texte' n'est pas un nombre valide."
@@ -80,7 +81,7 @@ function Get-DoubleOuNull { param([string]$Texte)
 function Get-IntOuNull { param([string]$Texte)
     if ([string]::IsNullOrWhiteSpace($Texte)) { return $null }
     $valeur = 0
-    if ([int]::TryParse($Texte, [ref]$valeur)) { return $valeur }
+    if ([int]::TryParse(($Texte -replace '\s', ''), [ref]$valeur)) { return $valeur }
     throw "'$Texte' n'est pas un nombre entier valide."
 }
 
@@ -568,6 +569,8 @@ function Update-VueEcheances {
     $mapStatuts = @{ 'En attente' = 'en_attente'; 'En retard' = 'en_retard'; 'Payées' = 'payee' }
     if ($mapStatuts.ContainsKey($filtre)) {
         $toutes = $toutes | Where-Object { $_.statut -eq $mapStatuts[$filtre] }
+        # Une echeance d'une commande annulee n'est plus due : on ne la montre pas comme "en attente"/"en retard".
+        if ($filtre -ne 'Payées') { $toutes = $toutes | Where-Object { $_.commande_statut -ne 'annulee' } }
     }
     $GridEcheances.ItemsSource = @($toutes)
 }
@@ -1154,12 +1157,17 @@ function Update-VueProgrammesPourClient {
 }
 
 function Update-VueSeances {
+    <# -SelectionnerId : re-selectionne cette seance apres rafraichissement (sinon la premiere). #>
+    param([int] $SelectionnerId)
     $ListeSeances.ItemsSource = $null
     $GridSeanceExercices.ItemsSource = $null
     if (-not $CmbProgrammeSelection.SelectedItem) { return }
     $seances = @(Get-Seances -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id)
     $ListeSeances.ItemsSource = $seances
-    if ($seances.Count -gt 0) { $ListeSeances.SelectedIndex = 0 }
+    if ($seances.Count -eq 0) { return }
+    $aSelectionner = $null
+    if ($SelectionnerId) { $aSelectionner = $seances | Where-Object { [int]$_.id -eq $SelectionnerId } | Select-Object -First 1 }
+    if ($aSelectionner) { $ListeSeances.SelectedItem = $aSelectionner } else { $ListeSeances.SelectedIndex = 0 }
 }
 
 function Update-VueSeanceExercices {
@@ -1263,9 +1271,9 @@ $GridSeanceExercices.Add_SelectionChanged({
     Invoke-Protege {
         if (-not $CmbProgrammeSelection.SelectedItem) { Show-Erreur "Selectionne d'abord un programme."; return }
         if ([string]::IsNullOrWhiteSpace($TxtNouvelleSeance.Text)) { Show-Erreur "Indique un nom de seance."; return }
-        New-Seance -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Nom $TxtNouvelleSeance.Text.Trim() | Out-Null
+        $idSeance = New-Seance -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Nom $TxtNouvelleSeance.Text.Trim()
         $TxtNouvelleSeance.Text = ''
-        Update-VueSeances
+        Update-VueSeances -SelectionnerId $idSeance
     }
 })
 
@@ -1276,8 +1284,8 @@ $GridSeanceExercices.Add_SelectionChanged({
         if ($modeles.Count -eq 0) { Show-Erreur "Aucun modele de seance disponible. Cree d'abord un modele dans Bibliotheques > Modeles de seance."; return }
         $resultat = Show-DialogChoixModele -Modeles $modeles
         if (-not $resultat) { return }
-        New-SeanceDepuisModele -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -SeanceModeleId $resultat.SeanceModeleId -Nom $resultat.Nom | Out-Null
-        Update-VueSeances
+        $idSeance = New-SeanceDepuisModele -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -SeanceModeleId $resultat.SeanceModeleId -Nom $resultat.Nom
+        Update-VueSeances -SelectionnerId $idSeance
     }
 })
 
@@ -1286,23 +1294,26 @@ $GridSeanceExercices.Add_SelectionChanged({
         if (-not $ListeSeances.SelectedItem) { Show-Erreur "Selectionne une seance."; return }
         $jourChoisi = if ($CmbSeanceJour.SelectedItem) { [string]$CmbSeanceJour.SelectedItem.Content } else { '(aucun)' }
         $jour = if ($jourChoisi -eq '(aucun)') { $null } else { $jourChoisi }
-        Update-SeanceJour -DbPath $DbPath -Id $ListeSeances.SelectedItem.id -Jour $jour
-        Update-VueSeances
+        $idSeance = [int]$ListeSeances.SelectedItem.id
+        Update-SeanceJour -DbPath $DbPath -Id $idSeance -Jour $jour
+        Update-VueSeances -SelectionnerId $idSeance
     }
 })
 
 (Get-Ctrl 'BtnSeanceMonter').Add_Click({
     Invoke-Protege {
         if (-not $ListeSeances.SelectedItem) { Show-Erreur "Selectionne une seance."; return }
-        Move-Seance -DbPath $DbPath -Id $ListeSeances.SelectedItem.id -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Direction -1
-        Update-VueSeances
+        $idSeance = [int]$ListeSeances.SelectedItem.id
+        Move-Seance -DbPath $DbPath -Id $idSeance -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Direction -1
+        Update-VueSeances -SelectionnerId $idSeance
     }
 })
 (Get-Ctrl 'BtnSeanceDescendre').Add_Click({
     Invoke-Protege {
         if (-not $ListeSeances.SelectedItem) { Show-Erreur "Selectionne une seance."; return }
-        Move-Seance -DbPath $DbPath -Id $ListeSeances.SelectedItem.id -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Direction 1
-        Update-VueSeances
+        $idSeance = [int]$ListeSeances.SelectedItem.id
+        Move-Seance -DbPath $DbPath -Id $idSeance -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Direction 1
+        Update-VueSeances -SelectionnerId $idSeance
     }
 })
 (Get-Ctrl 'BtnSeanceSupprimer').Add_Click({
@@ -1614,7 +1625,11 @@ function Format-DetailReponse {
     if (-not $DonneesJson) { return '' }
     try {
         $obj = $DonneesJson | ConvertFrom-Json
-        $lignes = foreach ($prop in $obj.PSObject.Properties) { "$($prop.Name) : $($prop.Value)" }
+        $lignes = foreach ($prop in $obj.PSObject.Properties) {
+            # Reponses importees avant v1.15.2 : les dates Excel etaient stockees en "\/Date(...)\/" et reviennent en DateTime.
+            $valeur = if ($prop.Value -is [datetime]) { $prop.Value.ToLocalTime().ToString('dd/MM/yyyy HH:mm') } else { $prop.Value }
+            "$($prop.Name) : $valeur"
+        }
         return ($lignes -join "`r`n")
     } catch {
         return [string]$DonneesJson

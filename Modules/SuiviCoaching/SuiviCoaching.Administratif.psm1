@@ -112,7 +112,7 @@ function New-Commande {
         Cree une commande et genere automatiquement son echeancier.
         - one_shot      : une seule echeance a DateDebut
         - hebdomadaire  : une echeance tous les 7 jours entre DateDebut et DateFin
-        - mensuel       : une echeance par mois (meme jour que DateDebut) entre DateDebut et DateFin
+        - mensuel       : une echeance par mois (meme jour que DateDebut, ou dernier jour du mois s'il est plus court) entre DateDebut et DateFin
         Le montant total est reparti a parts egales sur les echeances (arrondi au centime,
         la derniere echeance absorbe l'ecart d'arrondi).
     #>
@@ -157,10 +157,14 @@ SELECT last_insert_rowid() AS id;
             }
         }
         'mensuel' {
+            # Toujours calcule depuis DateDebut (et non mois apres mois) : un debut le 31 donne 28/02 puis 31/03,
+            # au lieu de rester bloque au 28 pour tous les mois suivants.
+            $k = 0
             $current = $DateDebut
             while ($current -le $DateFin) {
                 $dates.Add($current)
-                $current = $current.AddMonths(1)
+                $k++
+                $current = $DateDebut.AddMonths($k)
             }
         }
     }
@@ -194,6 +198,7 @@ function Update-EcheancesRetard {
 UPDATE echeances
 SET statut = 'en_retard'
 WHERE statut = 'en_attente' AND date_echeance < date('now')
+  AND commande_id NOT IN (SELECT id FROM commandes WHERE statut = 'annulee')
 "@
 }
 
@@ -205,7 +210,7 @@ function Get-Echeances {
     )
 
     $query = @"
-SELECT e.*, cmd.type_facturation, c.id AS client_id, c.nom || ' ' || c.prenom AS client_nom
+SELECT e.*, cmd.type_facturation, cmd.statut AS commande_statut, c.id AS client_id, c.nom || ' ' || c.prenom AS client_nom
 FROM echeances e
 JOIN commandes cmd ON cmd.id = e.commande_id
 JOIN clients c ON c.id = cmd.client_id

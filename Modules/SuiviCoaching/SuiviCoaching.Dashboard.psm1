@@ -8,15 +8,17 @@ function Get-StatsDashboard {
 
     $clientsActifs = (Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT COUNT(*) AS n FROM clients WHERE statut = 'actif'").n
 
-    $enAttente = Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT COUNT(*) AS n, COALESCE(SUM(montant), 0) AS total FROM echeances WHERE statut = 'en_attente'"
-    $enRetard = Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT COUNT(*) AS n, COALESCE(SUM(montant), 0) AS total FROM echeances WHERE statut = 'en_retard'"
+    # Les echeances d'une commande annulee ne sont plus dues : elles ne comptent ni en attente ni en retard.
+    $horsAnnulees = "commande_id NOT IN (SELECT id FROM commandes WHERE statut = 'annulee')"
+    $enAttente = Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT COUNT(*) AS n, COALESCE(SUM(montant), 0) AS total FROM echeances WHERE statut = 'en_attente' AND $horsAnnulees"
+    $enRetard = Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT COUNT(*) AS n, COALESCE(SUM(montant), 0) AS total FROM echeances WHERE statut = 'en_retard' AND $horsAnnulees"
 
     $prochaines = Invoke-SqliteQuery -DataSource $DbPath -Query @"
 SELECT e.date_echeance, e.montant, c.nom || ' ' || c.prenom AS client_nom
 FROM echeances e
 JOIN commandes cmd ON cmd.id = e.commande_id
 JOIN clients c ON c.id = cmd.client_id
-WHERE e.statut IN ('en_attente', 'en_retard')
+WHERE e.statut IN ('en_attente', 'en_retard') AND cmd.statut <> 'annulee'
 ORDER BY e.date_echeance
 LIMIT 10
 "@

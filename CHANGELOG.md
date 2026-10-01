@@ -6,6 +6,18 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.15.2] - 2026-10-01
+
+### Corrigé
+- Administratif : les échéances d'une commande **annulée** ne sont plus comptées comme paiements en attente/en retard dans le tableau de bord, ne passent plus "en retard", et n'apparaissent plus dans les filtres "En attente"/"En retard" de l'onglet Échéances (nouvelle colonne "Commande" pour voir le statut de la commande).
+- Administratif : l'échéancier mensuel d'une commande commençant un 29, 30 ou 31 ne "dérive" plus (ex. début le 31/01 : 28/02 puis 31/03, 30/04… au lieu de rester bloqué au 28 tous les mois suivants).
+- Suivi > Questionnaires : l'import d'un fichier **CSV** (proposé par la fenêtre de choix de fichier) plantait ; il fonctionne désormais (séparateur virgule ou point-virgule détecté automatiquement).
+- Suivi > Questionnaires : les dates des réponses étaient stockées sous une forme illisible ("/Date(…)/") et affichées au format américain ; elles sont maintenant au format JJ/MM/AAAA HH:MM (y compris pour les réponses déjà importées).
+- Suivi > Tracking quotidien / Roadmap : un fichier dont le client a supprimé une colonne faisait échouer toutes les lignes ; la colonne manquante est maintenant simplement laissée vide. La ligne d'exemple du modèle n'est plus importée comme une vraie donnée si le client l'a laissée.
+- Suivi > Séances réalisées (et tracking/roadmap) : choisir un mauvais fichier affiche maintenant un message clair (colonnes manquantes) au lieu d'une erreur technique.
+- Programmes : après "Monter", "Descendre" ou "Enregistrer" le jour d'une séance, la séance reste sélectionnée (avant, la sélection revenait toujours sur la première séance) ; une séance nouvellement ajoutée est directement sélectionnée.
+- Les nombres saisis avec des espaces ("10 000") sont acceptés dans les formulaires et dans les imports Excel/FatSecret (ils étaient refusés, ou ignorés silencieusement à l'import).
+
 ## [1.15.1] - 2026-10-01
 
 ### Corrigé

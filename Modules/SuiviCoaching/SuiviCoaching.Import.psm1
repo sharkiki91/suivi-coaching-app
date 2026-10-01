@@ -12,7 +12,7 @@ function ConvertTo-DoubleTolerant {
     $texte = [string]$Valeur
     if ([string]::IsNullOrWhiteSpace($texte)) { return $null }
 
-    $texte = $texte.Replace(';', '.').Replace(',', '.')
+    $texte = ($texte -replace '\s', '').Replace(';', '.').Replace(',', '.')
     $parsed = 0.0
     if ([double]::TryParse($texte, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsed)) {
         return $parsed
@@ -162,9 +162,52 @@ function Find-ClientParNomOuEmail {
     return $null
 }
 
+function Get-ValeurColonne {
+    <#
+        Lit la colonne $Nom d'une ligne importee, ou $null si le fichier n'a pas cette colonne
+        (sous Set-StrictMode, $ligne.'Colonne absente' leve une erreur au lieu de renvoyer $null).
+    #>
+    param($Ligne, [string] $Nom)
+    $prop = $Ligne.PSObject.Properties[$Nom]
+    if ($prop) { return $prop.Value }
+    return $null
+}
+
+function Test-ColonnesRequises {
+    <# Leve une erreur lisible si le fichier ne contient pas les colonnes attendues (mauvais fichier choisi). #>
+    param($Lignes, [string[]] $Colonnes, [string] $DescriptionFichier)
+    if (@($Lignes).Count -eq 0) { return }
+    $presentes = @($Lignes)[0].PSObject.Properties.Name
+    $manquantes = @($Colonnes | Where-Object { $presentes -notcontains $_ })
+    if ($manquantes.Count -gt 0) {
+        throw "Ce fichier ne ressemble pas a $DescriptionFichier (colonne(s) manquante(s) : $($manquantes -join ', '))."
+    }
+}
+
+function Get-SeparateurCsv {
+    <# Devine le separateur d'un CSV (virgule pour Google Forms/Sheets, point-virgule pour Excel en francais). #>
+    param([Parameter(Mandatory)] [string] $CsvPath)
+    $premiere = Get-Content -Path $CsvPath -TotalCount 1 -Encoding UTF8
+    if ($null -eq $premiere) { return ',' }
+    if (([regex]::Matches($premiere, ';')).Count -gt ([regex]::Matches($premiere, ',')).Count) { return ';' }
+    return ','
+}
+
+function Test-EstCsv { param([string] $Path) return ([System.IO.Path]::GetExtension($Path) -eq '.csv') }
+
 function Get-EnTetesExcel {
-    <# Renvoie la liste des en-tetes (ligne 1) d'un fichier Excel, meme s'il n'y a aucune ligne de donnees. #>
+    <# Renvoie la liste des en-tetes (ligne 1) d'un fichier Excel ou CSV, meme s'il n'y a aucune ligne de donnees. #>
     param([Parameter(Mandatory)] [string] $ExcelPath)
+    if (Test-EstCsv $ExcelPath) {
+        Add-Type -AssemblyName Microsoft.VisualBasic
+        $parser = New-Object Microsoft.VisualBasic.FileIO.TextFieldParser($ExcelPath, [System.Text.Encoding]::UTF8)
+        try {
+            $parser.SetDelimiters((Get-SeparateurCsv $ExcelPath))
+            $parser.HasFieldsEnclosedInQuotes = $true
+            if ($parser.EndOfData) { return @() }
+            return @($parser.ReadFields() | Where-Object { $_ })
+        } finally { $parser.Close() }
+    }
     $premiereLigne = Import-Excel -Path $ExcelPath -NoHeader | Select-Object -First 1
     if (-not $premiereLigne) { return @() }
     return @($premiereLigne.PSObject.Properties.Value | Where-Object { $_ })
@@ -200,21 +243,27 @@ function Import-QuestionnaireDepuisExcel {
     # -AsText evite qu'un numero de telephone (souvent commencant par 0) soit lu comme un nombre et perde son 0 initial
     $colonnesTexte = @()
     if ($ColonneTelephone) { $colonnesTexte = @($ColonneTelephone) }
-    $lignes = if ($colonnesTexte.Count -gt 0) { @(Import-Excel -Path $ExcelPath -AsText $colonnesTexte) } else { @(Import-Excel -Path $ExcelPath) }
+    $lignes = if (Test-EstCsv $ExcelPath) {
+        # Export CSV de Google Forms/Sheets : tout est deja du texte (le 0 initial des telephones est conserve).
+        @(Import-Csv -Path $ExcelPath -Delimiter (Get-SeparateurCsv $ExcelPath) -Encoding UTF8)
+    } elseif ($colonnesTexte.Count -gt 0) { @(Import-Excel -Path $ExcelPath -AsText $colonnesTexte) } else { @(Import-Excel -Path $ExcelPath) }
     $nomFichier = Split-Path $ExcelPath -Leaf
 
     foreach ($ligne in $lignes) {
         try {
             $dateIso = $null
-            if ($ColonneDate) { $dateIso = ConvertTo-DateIso $ligne.$ColonneDate }
+            if ($ColonneDate) { $dateIso = ConvertTo-DateIso (Get-ValeurColonne $ligne $ColonneDate) }
             if (-not $dateIso) { $dateIso = (Get-Date).ToString('yyyy-MM-dd') }
 
-            $nomValeur = if ($ColonneNom) { [string]$ligne.$ColonneNom } else { $null }
-            $emailValeur = if ($ColonneEmail) { [string]$ligne.$ColonneEmail } else { $null }
+            $nomValeur = if ($ColonneNom) { [string](Get-ValeurColonne $ligne $ColonneNom) } else { $null }
+            $emailValeur = if ($ColonneEmail) { [string](Get-ValeurColonne $ligne $ColonneEmail) } else { $null }
             $clientId = Find-ClientParNomOuEmail -Clients $clients -Nom $nomValeur -Email $emailValeur
 
             $dict = [ordered]@{}
-            foreach ($prop in $ligne.PSObject.Properties) { $dict[$prop.Name] = $prop.Value }
+            foreach ($prop in $ligne.PSObject.Properties) {
+                # ConvertTo-Json (PS 5.1) ecrirait une date Excel sous la forme "\/Date(1790770917240)\/" : on la stocke lisible.
+                $dict[$prop.Name] = if ($prop.Value -is [datetime]) { $prop.Value.ToString('dd/MM/yyyy HH:mm') } else { $prop.Value }
+            }
             $json = $dict | ConvertTo-Json -Compress
 
             New-QuestionnaireReponse -DbPath $DbPath -ClientId $clientId -Type $Type -DateReponse $dateIso -DonneesJson $json -FichierSource $nomFichier | Out-Null
@@ -222,10 +271,10 @@ function Import-QuestionnaireDepuisExcel {
             if ($clientId) { $resultat.Rattachees++ } else { $resultat.NonRattachees++ }
 
             if ($clientId -and $Type -eq 'pre_coaching') {
-                $telephoneValeur = if ($ColonneTelephone) { [string]$ligne.$ColonneTelephone } else { $null }
+                $telephoneValeur = if ($ColonneTelephone) { [string](Get-ValeurColonne $ligne $ColonneTelephone) } else { $null }
                 $morceauxObjectifs = @()
                 foreach ($col in @($ColonneObjectifLongTerme, $ColonneObjectifCourtTerme, $ColonneMoyens)) {
-                    if ($col -and -not [string]::IsNullOrWhiteSpace([string]$ligne.$col)) { $morceauxObjectifs += [string]$ligne.$col }
+                    if ($col -and -not [string]::IsNullOrWhiteSpace([string](Get-ValeurColonne $ligne $col))) { $morceauxObjectifs += [string](Get-ValeurColonne $ligne $col) }
                 }
                 $objectifsValeur = if ($morceauxObjectifs.Count -gt 0) { $morceauxObjectifs -join "`r`n`r`n" } else { $null }
 
@@ -276,23 +325,27 @@ function Import-TrackingDepuisExcel {
 
     $resultat = [ordered]@{ Importes = 0; IgnoresSansDate = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
     $lignes = @(Import-Excel -Path $ExcelPath)
+    Test-ColonnesRequises -Lignes $lignes -Colonnes @('Date') -DescriptionFichier 'un suivi quotidien (modele a telecharger depuis l''application)'
 
     foreach ($ligne in $lignes) {
-        $dateIso = ConvertTo-DateIso $ligne.'Date'
+        # Une colonne supprimee par le client ne doit pas faire echouer toute la ligne : elle est simplement vide.
+        $v = { param([string]$Nom) Get-ValeurColonne $ligne $Nom }
+        if ([string](& $v 'Bilan') -like 'Exemple de ligne a remplacer*') { continue }
+        $dateIso = ConvertTo-DateIso (& $v 'Date')
         if (-not $dateIso) { $resultat.IgnoresSansDate++; continue }
         try {
             Set-SuiviQuotidienJour -DbPath $DbPath -ClientId $ClientId -Date $dateIso `
-                -Poids (ConvertTo-DoubleTolerant $ligne.'Poids (kg)') `
-                -SommeilHeures (ConvertTo-DoubleTolerant $ligne.'Sommeil (h)') `
-                -QualiteSommeil (ConvertTo-DoubleTolerant $ligne.'Qualite sommeil (1-5)') `
-                -HeureCoucher ([string]$ligne.'Heure coucher') -HeureLever ([string]$ligne.'Heure lever') `
-                -Energie (ConvertTo-DoubleTolerant $ligne.'Energie (1-5)') `
-                -AdhesionNutrition (ConvertTo-DoubleTolerant $ligne.'Adhesion nutrition (1-5)') `
-                -Digestion (ConvertTo-DoubleTolerant $ligne.'Digestion (1-5)') `
-                -NbPas (ConvertTo-DoubleTolerant $ligne.'Nb pas') -CardioMinutes (ConvertTo-DoubleTolerant $ligne.'Cardio (min)') `
-                -Motivation (ConvertTo-DoubleTolerant $ligne.'Motivation (1-5)') `
-                -TensionSystolique (ConvertTo-DoubleTolerant $ligne.'Tension systolique') -TensionDiastolique (ConvertTo-DoubleTolerant $ligne.'Tension diastolique') `
-                -Bilan ([string]$ligne.'Bilan')
+                -Poids (ConvertTo-DoubleTolerant (& $v 'Poids (kg)')) `
+                -SommeilHeures (ConvertTo-DoubleTolerant (& $v 'Sommeil (h)')) `
+                -QualiteSommeil (ConvertTo-DoubleTolerant (& $v 'Qualite sommeil (1-5)')) `
+                -HeureCoucher ([string](& $v 'Heure coucher')) -HeureLever ([string](& $v 'Heure lever')) `
+                -Energie (ConvertTo-DoubleTolerant (& $v 'Energie (1-5)')) `
+                -AdhesionNutrition (ConvertTo-DoubleTolerant (& $v 'Adhesion nutrition (1-5)')) `
+                -Digestion (ConvertTo-DoubleTolerant (& $v 'Digestion (1-5)')) `
+                -NbPas (ConvertTo-DoubleTolerant (& $v 'Nb pas')) -CardioMinutes (ConvertTo-DoubleTolerant (& $v 'Cardio (min)')) `
+                -Motivation (ConvertTo-DoubleTolerant (& $v 'Motivation (1-5)')) `
+                -TensionSystolique (ConvertTo-DoubleTolerant (& $v 'Tension systolique')) -TensionDiastolique (ConvertTo-DoubleTolerant (& $v 'Tension diastolique')) `
+                -Bilan ([string](& $v 'Bilan'))
             $resultat.Importes++
         } catch {
             $resultat.Erreurs.Add("Ligne du $dateIso : $($_.Exception.Message)")
@@ -333,28 +386,31 @@ function Import-RoadmapDepuisExcel {
 
     $resultat = [ordered]@{ Importees = 0; IgnoreesSansNumero = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
     $lignes = @(Import-Excel -Path $ExcelPath)
+    Test-ColonnesRequises -Lignes $lignes -Colonnes @('Semaine') -DescriptionFichier 'une roadmap (modele a telecharger depuis l''application)'
 
     $existantes = @{}
     foreach ($s in @(Get-RoadmapSemaines -DbPath $DbPath -ClientId $ClientId)) { $existantes[[int]$s.semaine_numero] = $s }
 
     foreach ($ligne in $lignes) {
-        $numeroDouble = ConvertTo-DoubleTolerant $ligne.'Semaine'
+        $v = { param([string]$Nom) Get-ValeurColonne $ligne $Nom }
+        if ([string](& $v 'Notes') -like 'Exemple de ligne a remplacer*') { continue }
+        $numeroDouble = ConvertTo-DoubleTolerant (& $v 'Semaine')
         if ($null -eq $numeroDouble) { $resultat.IgnoreesSansNumero++; continue }
         $numero = [int]$numeroDouble
         try {
             $champs = @{
                 DbPath = $DbPath
                 SemaineNumero = $numero
-                DateDebut = (ConvertTo-DateIso $ligne.'Date debut')
-                Phase = (Get-TexteImportOuNull $ligne.'Phase')
-                Nutrition = (Get-TexteImportOuNull $ligne.'Nutrition')
-                PoidsMoyen = (ConvertTo-DoubleTolerant $ligne.'Poids moyen (kg)')
-                DepenseCalorique = (ConvertTo-DoubleTolerant $ligne.'Depense calorique')
-                CardioMinutes = (ConvertTo-DoubleTolerant $ligne.'Cardio (min)')
-                Pas = (ConvertTo-DoubleTolerant $ligne.'Pas')
-                PrecisionTraining = (Get-TexteImportOuNull $ligne.'Precision training')
-                Evenements = (Get-TexteImportOuNull $ligne.'Evenements')
-                Notes = (Get-TexteImportOuNull $ligne.'Notes')
+                DateDebut = (ConvertTo-DateIso (& $v 'Date debut'))
+                Phase = (Get-TexteImportOuNull (& $v 'Phase'))
+                Nutrition = (Get-TexteImportOuNull (& $v 'Nutrition'))
+                PoidsMoyen = (ConvertTo-DoubleTolerant (& $v 'Poids moyen (kg)'))
+                DepenseCalorique = (ConvertTo-DoubleTolerant (& $v 'Depense calorique'))
+                CardioMinutes = (ConvertTo-DoubleTolerant (& $v 'Cardio (min)'))
+                Pas = (ConvertTo-DoubleTolerant (& $v 'Pas'))
+                PrecisionTraining = (Get-TexteImportOuNull (& $v 'Precision training'))
+                Evenements = (Get-TexteImportOuNull (& $v 'Evenements'))
+                Notes = (Get-TexteImportOuNull (& $v 'Notes'))
             }
             if ($existantes.ContainsKey($numero)) {
                 Update-RoadmapSemaine -Id ([int]$existantes[$numero].id) @champs
@@ -381,7 +437,7 @@ function Convert-DoubleFatSecret {
     <# Convertit un champ numerique FatSecret (virgule decimale, ou vide) en double. Retourne $null si vide/non convertible. #>
     param($Valeur)
     if ($null -eq $Valeur) { return $null }
-    $texte = ([string]$Valeur).Trim().Replace(',', '.')
+    $texte = (([string]$Valeur) -replace '\s', '').Replace(',', '.')
     if ([string]::IsNullOrWhiteSpace($texte)) { return $null }
     $parsed = 0.0
     if ([double]::TryParse($texte, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsed)) {
@@ -468,6 +524,8 @@ function Import-SeanceRealiseeDepuisExcel {
 
     $resultat = [ordered]@{ Importees = 0; IgnoreesSansDate = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
     $lignes = @(Import-Excel -Path $ExcelPath)
+    Test-ColonnesRequises -Lignes $lignes -Colonnes @('SeanceId', 'SeanceExerciceId', 'Serie', 'Date de realisation', 'Repetitions realisees', 'Charge realisee') `
+        -DescriptionFichier 'une feuille de seance (generee depuis Programmes > Feuille de seance)'
     $groupes = @($lignes | Group-Object -Property SeanceExerciceId)
 
     foreach ($groupe in $groupes) {
@@ -483,9 +541,9 @@ function Import-SeanceRealiseeDepuisExcel {
 
         $repsValeurs = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull $_.'Repetitions realisees' })
         $chargeValeurs = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull $_.'Charge realisee' })
-        $recup = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull $_.'Recup realisee (s)' } | Where-Object { $_ }) | Select-Object -First 1
-        $tempo = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull $_.'Tempo realise' } | Where-Object { $_ }) | Select-Object -First 1
-        $notes = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull $_.Notes } | Where-Object { $_ }) | Select-Object -First 1
+        $recup = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull (Get-ValeurColonne $_ 'Recup realisee (s)') } | Where-Object { $_ }) | Select-Object -First 1
+        $tempo = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull (Get-ValeurColonne $_ 'Tempo realise') } | Where-Object { $_ }) | Select-Object -First 1
+        $notes = @($lignesExercice | ForEach-Object { Get-TexteImportOuNull (Get-ValeurColonne $_ 'Notes') } | Where-Object { $_ }) | Select-Object -First 1
 
         $repsRenseignees = @($repsValeurs | Where-Object { $_ })
         $chargeRenseignees = @($chargeValeurs | Where-Object { $_ })
@@ -503,7 +561,7 @@ function Import-SeanceRealiseeDepuisExcel {
                 -Series ([string]$lignesExercice.Count) -Repetitions $reps -Charge $charge -RecuperationS $recup -Tempo $tempo -Notes $notes
             $resultat.Importees++
         } catch {
-            $resultat.Erreurs.Add("Ligne '$($premiere.Exercice)' du $dateIso : $($_.Exception.Message)")
+            $resultat.Erreurs.Add("Ligne '$(Get-ValeurColonne $premiere 'Exercice')' du $dateIso : $($_.Exception.Message)")
         }
     }
     return [pscustomobject]$resultat
