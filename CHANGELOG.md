@@ -6,6 +6,13 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.17.0] - 2026-10-01
+
+### Modifié
+- **Export PDF du programme** : nouvelle mise en page calquée sur l'onglet TRAINING du fichier d'origine du coach — en-tête violet, tableau "Semaine type" aux couleurs du programme, une bande lavande verticale avec le nom (et le jour) de chaque séance, colonnes # / Exercice / Variante / Set / Reps / Charge / Récup / Tempo / Muscle cible / Lien, **une ligne par série**, noms en violet, séparateur gris entre les exercices, format A4 paysage, un exercice n'est jamais coupé entre deux pages.
+- **Feuille de séance Excel (suivi des performances)** : reproduit l'onglet TRAINING d'origine. Pour chaque séance : le programme à gauche (une ligne par série, cellules fusionnées par exercice, mêmes couleurs/polices que l'original, figé à l'écran quand on fait défiler), et à droite 6 blocs "SÉANCE 1…6" (une case DATE, puis # / REPS / CHARGE par série et NOTES par exercice) pour noter 6 séances successives. Impression en paysage sur la largeur d'une page.
+- **Import des séances réalisées** : lit ce nouveau format — chaque bloc SÉANCE daté devient une séance réalisée (répétitions/charges assemblées série par série, ex. "12 / 11 / 10 / 9"). Un bloc rempli sans date est signalé. Les anciennes feuilles (format tableau) déjà envoyées aux clients restent importables.
+
 ## [1.16.0] - 2026-10-01
 
 ### Ajouté

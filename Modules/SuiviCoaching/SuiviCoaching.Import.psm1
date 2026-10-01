@@ -110,6 +110,12 @@ function ConvertTo-DateIso {
 
     if ($null -eq $Valeur) { return $null }
     if ($Valeur -is [datetime]) { return $Valeur.ToString('yyyy-MM-dd') }
+    # Cellule date lue directement (EPPlus) : Excel stocke les dates en nombre de jours depuis 1900
+    if ($Valeur -is [double] -or $Valeur -is [int]) {
+        $n = [double]$Valeur
+        if ($n -ge 20000 -and $n -le 80000) { return [datetime]::FromOADate($n).ToString('yyyy-MM-dd') }
+        return $null
+    }
     $texte = [string]$Valeur
     if ([string]::IsNullOrWhiteSpace($texte)) { return $null }
 
@@ -507,6 +513,67 @@ function Import-JournalAlimentaireDepuisFatSecret {
     return [pscustomobject]$resultat
 }
 
+function Import-FeuilleSeanceFormatCoach {
+    <#
+        Lit la feuille de suivi generee par Export-FeuilleSeanceExcel : pour chaque seance, une ligne
+        "D|seanceId" (colonne A masquee) portant les cases DATE des blocs SEANCE 1..6, puis une ligne
+        "S|seanceId|seanceExerciceId|serie" par serie, avec REPS / CHARGE (et NOTES sur la 1re serie
+        de l'exercice, cellule fusionnee) sous chaque bloc. Chaque bloc renseigne = une seance realisee
+        a sa date ; un bloc rempli sans date est compte dans IgnoreesSansDate.
+    #>
+    param([string] $DbPath, [int] $ClientId, $Ws, $Resultat)
+
+    $finLigne = $Ws.Dimension.End.Row; $finCol = $Ws.Dimension.End.Column
+    $blocs = @(); $dates = @{}
+    $saisies = [ordered]@{}   # "colonneBloc|seanceExerciceId" -> valeurs saisies pour cet exercice dans ce bloc
+    for ($r = 1; $r -le $finLigne; $r++) {
+        $repere = [string]$Ws.Cells[$r, 1].Value
+        if ($repere -like 'D|*') {
+            # Les blocs sont retrouves par leur case "DATE" (resiste a un decalage de colonnes)
+            $blocs = @(for ($c = 2; $c -le $finCol; $c++) { if ([string]$Ws.Cells[$r, $c].Text -eq 'DATE') { $c } })
+            $dates = @{}
+            foreach ($c0 in $blocs) { $dates[$c0] = ConvertTo-DateIso $Ws.Cells[$r, ($c0 + 1)].Value }
+            continue
+        }
+        if ($repere -notlike 'S|*') { continue }
+        $morceaux = $repere.Split('|')
+        if ($morceaux.Count -lt 4) { continue }
+        $seanceId = [int]$morceaux[1]; $seId = [int]$morceaux[2]; $numSerie = [int]$morceaux[3]
+        foreach ($c0 in $blocs) {
+            $cle = "$c0|$seId"
+            if (-not $saisies.Contains($cle)) {
+                $saisies[$cle] = [pscustomobject]@{
+                    SeanceId = $seanceId; SeanceExerciceId = $seId; Date = $dates[$c0]; Bloc = [array]::IndexOf($blocs, $c0) + 1
+                    Exercice = [string]$Ws.Cells[$r, 4].Text
+                    Reps = New-Object System.Collections.Generic.List[string]; Charges = New-Object System.Collections.Generic.List[string]; Notes = $null
+                }
+            }
+            $saisie = $saisies[$cle]
+            $saisie.Reps.Add((Get-TexteImportOuNull $Ws.Cells[$r, ($c0 + 1)].Value))
+            $saisie.Charges.Add((Get-TexteImportOuNull $Ws.Cells[$r, ($c0 + 2)].Value))
+            $note = Get-TexteImportOuNull $Ws.Cells[$r, ($c0 + 3)].Value
+            if ($note -and -not $saisie.Notes) { $saisie.Notes = $note }
+        }
+    }
+
+    foreach ($saisie in $saisies.Values) {
+        $repsRenseignees = @($saisie.Reps | Where-Object { $_ })
+        $chargesRenseignees = @($saisie.Charges | Where-Object { $_ })
+        if ($repsRenseignees.Count -eq 0 -and $chargesRenseignees.Count -eq 0 -and -not $saisie.Notes) { continue }
+        if (-not $saisie.Date) { $Resultat.IgnoreesSansDate++; continue }
+        $reps = if ($repsRenseignees.Count -gt 0) { ($saisie.Reps | ForEach-Object { if ($_) { $_ } else { '-' } }) -join ' / ' } else { $null }
+        $charge = if ($chargesRenseignees.Count -gt 0) { ($saisie.Charges | ForEach-Object { if ($_) { $_ } else { '-' } }) -join ' / ' } else { $null }
+        try {
+            $seanceRealiseeId = Get-OuCreerSeanceRealisee -DbPath $DbPath -SeanceId $saisie.SeanceId -ClientId $ClientId -DateRealisation $saisie.Date
+            Set-ExerciceRealise -DbPath $DbPath -SeanceRealiseeId $seanceRealiseeId -SeanceExerciceId $saisie.SeanceExerciceId `
+                -Series ([string]$saisie.Reps.Count) -Repetitions $reps -Charge $charge -Notes $saisie.Notes
+            $Resultat.Importees++
+        } catch {
+            $Resultat.Erreurs.Add("SEANCE $($saisie.Bloc) - '$($saisie.Exercice)' du $($saisie.Date) : $($_.Exception.Message)")
+        }
+    }
+}
+
 function Import-SeanceRealiseeDepuisExcel {
     <#
         Importe une feuille de seance remplie par le client (generee par Export-FeuilleSeanceExcel) :
@@ -524,6 +591,24 @@ function Import-SeanceRealiseeDepuisExcel {
     )
 
     $resultat = [ordered]@{ Importees = 0; IgnoreesSansDate = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
+
+    # Format actuel (v1.17+) : feuille "TRAINING" calquee sur le fichier du coach, reperee par la colonne A masquee.
+    $pkg = Open-ExcelPackage -Path $ExcelPath
+    try {
+        foreach ($ws in $pkg.Workbook.Worksheets) {
+            if (-not $ws.Dimension) { continue }
+            $estFormatCoach = $false
+            for ($r = 1; $r -le [math]::Min($ws.Dimension.End.Row, 30); $r++) { if ([string]$ws.Cells[$r, 1].Value -like 'D|*') { $estFormatCoach = $true; break } }
+            if ($estFormatCoach) {
+                Import-FeuilleSeanceFormatCoach -DbPath $DbPath -ClientId $ClientId -Ws $ws -Resultat $resultat
+                return [pscustomobject]$resultat
+            }
+        }
+    } finally {
+        Close-ExcelPackage $pkg -NoSave
+    }
+
+    # Ancien format (une ligne par serie, en tableau) : feuilles deja envoyees aux clients avant la v1.17.
     $lignes = @(Import-Excel -Path $ExcelPath)
     Test-ColonnesRequises -Lignes $lignes -Colonnes @('SeanceId', 'SeanceExerciceId', 'Serie', 'Date de realisation', 'Repetitions realisees', 'Charge realisee') `
         -DescriptionFichier 'une feuille de seance (generee depuis Programmes > Feuille de seance)'
