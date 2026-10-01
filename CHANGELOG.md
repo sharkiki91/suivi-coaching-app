@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.20.1] - 2026-10-01
+
+### Corrigé
+- Feuille de séance Excel : le libellé "DATE" de chaque bloc SÉANCE passait sur deux lignes (colonne trop étroite). La colonne est élargie et le libellé reste sur une seule ligne.
+
 ## [1.20.0] - 2026-10-01
 
 ### Modifié

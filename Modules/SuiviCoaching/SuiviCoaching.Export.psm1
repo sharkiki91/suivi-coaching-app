@@ -380,7 +380,8 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
             $ws.Column($cFin + 1).Width = 2.5
             for ($b = 0; $b -lt $NbBlocs; $b++) {
                 $c0 = $cPremierBloc + $b * $largeurBloc
-                $ws.Column($c0).Width = 4; $ws.Column($c0 + 1).Width = 7; $ws.Column($c0 + 2).Width = 8; $ws.Column($c0 + 3).Width = 16; $ws.Column($c0 + 4).Width = 2.5
+                $ws.Column($c0).Width = 6.5;   # assez large pour "DATE" sur une ligne
+                $ws.Column($c0 + 1).Width = 7; $ws.Column($c0 + 2).Width = 8; $ws.Column($c0 + 3).Width = 16; $ws.Column($c0 + 4).Width = 2.5
             }
 
             # Titre + consigne (repetes sur chaque onglet)
@@ -406,7 +407,8 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
             for ($b = 0; $b -lt $NbBlocs; $b++) {
                 $c0 = $cPremierBloc + $b * $largeurBloc
                 Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lTitre -C1 $c0 -L2 $lTitre -C2 ($c0 + 3) -Valeur "SEANCE $($b + 1)") -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras -Taille 10
-                Set-StyleExcel -Plage $ws.Cells[$lDate, $c0] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras -Taille 7
+                Set-StyleExcel -Plage $ws.Cells[$lDate, $c0] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras -Taille 8
+                $ws.Cells[$lDate, $c0].Style.WrapText = $false
                 $ws.Cells[$lDate, $c0].Value = 'DATE'
                 $pDate = Set-FusionExcel -Ws $ws -L1 $lDate -C1 ($c0 + 1) -L2 $lDate -C2 ($c0 + 3) -Valeur $null
                 Set-StyleExcel -Plage $pDate -Fond '#F3F0FA' -Couleur '#000000' -Gras -Taille 10
