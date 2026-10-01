@@ -620,30 +620,118 @@ function Export-PlanNutritionExcel {
         [Parameter(Mandatory)] [string] $Path
     )
 
+    <#
+        Meme presentation que l'onglet NUTRITION du fichier d'origine (et que l'export PDF) : un tableau
+        "PLAN JOURNALIER" par type de jour, repas en bande lavande, totaux PRO/GLU/LIP/FIB et kcal par
+        repas a droite, et un encadre RECAP du jour a cote.
+    #>
+    $plan = Invoke-SqliteQuery -DataSource $DbPath -Query @"
+SELECT pn.nom, pn.date_debut, pn.notes, c.nom AS client_nom, c.prenom AS client_prenom
+FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
+"@ -SqlParameters @{ Id = $PlanNutritionId }
     $typesJour = @(Get-TypesJour -DbPath $DbPath -PlanNutritionId $PlanNutritionId)
-    $lignes = New-Object System.Collections.Generic.List[object]
-    foreach ($tj in $typesJour) {
-        $repasListe = @(Get-Repas -DbPath $DbPath -TypeJourId ([int]$tj.id))
-        foreach ($r in $repasListe) {
-            $alimentsLignes = @(Get-RepasAliments -DbPath $DbPath -RepasId ([int]$r.id))
-            foreach ($l in $alimentsLignes) {
-                $lignes.Add([pscustomobject]@{
-                    'Type de jour' = $tj.nom
-                    Repas = $r.nom
-                    Aliment = $l.aliment_nom
-                    Quantite = $l.quantite
-                    Unite = $l.unite
-                    Kcal = $l.kcal_calc
-                    Proteines = $l.proteines_calc
-                    Glucides = $l.glucides_calc
-                    Lipides = $l.lipides_calc
-                    Fibres = $l.fibres_calc
-                })
-            }
-        }
-    }
+    $etiquettes = @(@('PRO', 'Proteines'), @('GLU', 'Glucides'), @('LIP', 'Lipides'), @('FIB', 'Fibres'))
+    $blanc = '#FFFFFF'
+
+    # Colonnes : B repas | C aliment | D quantite | E..I kcal/pro/glu/lip/fib | J..K etiquette+valeur | L kcal repas | M espace | N..O RECAP
+    $cRepas = 2; $cAliment = 3; $cQte = 4; $cKcal = 5; $cEtiq = 10; $cVal = 11; $cKcalRepas = 12; $cRecap = 14
     if (Test-Path $Path) { Remove-Item $Path -Force }
-    $lignes | Export-Excel -Path $Path -WorksheetName 'Plan nutrition' -AutoSize -TableStyle Medium2 -FreezeTopRow
+    $pkg = Open-ExcelPackage -Path $Path -Create
+    try {
+        $ws = Add-Worksheet -ExcelPackage $pkg -WorksheetName 'NUTRITION'
+        $ws.View.ShowGridLines = $false
+        $largeurs = @{ 1 = 2; 2 = 13; 3 = 28; 4 = 11; 5 = 9; 6 = 8; 7 = 8; 8 = 8; 9 = 8; 10 = 7; 11 = 8; 12 = 10; 13 = 3; 14 = 10; 15 = 11 }
+        foreach ($c in $largeurs.Keys) { $ws.Column($c).Width = $largeurs[$c] }
+
+        $titre = "PLAN NUTRITION $($plan.nom) - $($plan.client_prenom) $($plan.client_nom)".ToUpperInvariant()
+        Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 1 -C1 $cRepas -L2 1 -C2 $cKcalRepas -Valeur $titre) -Fond $Script:CouleurViolet -Couleur $blanc -Taille 12 -Gras
+        $ws.Row(1).Height = 24
+        $morceaux = @()
+        if ($plan.date_debut) { $morceaux += "Debut le $(([datetime]$plan.date_debut).ToString('dd/MM/yyyy'))" }
+        if ($plan.notes) { $morceaux += [string]$plan.notes }
+        Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 2 -C1 $cRepas -L2 2 -C2 $cKcalRepas -Valeur ($morceaux -join ' - ')) -Couleur $Script:CouleurViolet -Italique -Gauche
+        $ws.Row(2).Height = 26
+
+        $ligne = 4
+        foreach ($tj in $typesJour) {
+            $d = Get-DonneesJourNutrition -DbPath $DbPath -TypeJourId ([int]$tj.id)
+            $t = $d.Totaux
+            $l1 = $ligne; $l2 = $ligne + 1
+
+            # Ligne 1 : PLAN JOURNALIER + TOTAL du jour (violet fonce)
+            Set-FusionExcel -Ws $ws -L1 $l1 -C1 $cRepas -L2 $l1 -C2 $cAliment -Valeur "PLAN JOURNALIER - $(([string]$tj.nom).ToUpperInvariant())" | Out-Null
+            $ws.Cells[$l1, $cQte].Value = 'TOTAL'
+            $i = 0; foreach ($k in 'Kcal', 'Proteines', 'Glucides', 'Lipides', 'Fibres') { $ws.Cells[$l1, ($cKcal + $i)].Value = [double](Format-Nutri $t.$k); $i++ }
+            Set-FusionExcel -Ws $ws -L1 $l1 -C1 $cEtiq -L2 $l1 -C2 $cKcalRepas -Valeur $null | Out-Null
+            Set-StyleExcel -Plage $ws.Cells[$l1, $cRepas, $l1, $cKcalRepas] -Fond $Script:CouleurVioletFonce -Couleur $blanc -Gras
+            # Ligne 2 : en-tetes
+            $entetes = @{ $cRepas = 'REPAS'; $cAliment = 'ALIMENTS'; $cQte = 'QUANTITE'; 5 = 'KCAL'; 6 = 'PRO'; 7 = 'GLU'; 8 = 'LIP'; 9 = 'FIB' }
+            foreach ($c in $entetes.Keys) { $ws.Cells[$l2, $c].Value = $entetes[$c] }
+            Set-FusionExcel -Ws $ws -L1 $l2 -C1 $cEtiq -L2 $l2 -C2 $cKcalRepas -Valeur 'TOTAUX' | Out-Null
+            Set-StyleExcel -Plage $ws.Cells[$l2, $cRepas, $l2, $cKcalRepas] -Fond $Script:CouleurViolet -Couleur $blanc -Gras
+            Set-StyleExcel -Plage $ws.Cells[$l2, $cKcal, $l2, ($cKcal + 4)] -Fond $Script:CouleurLilas -Couleur $blanc -Gras
+            $ws.Row($l1).Height = 18; $ws.Row($l2).Height = 18
+
+            $ligne = $l2 + 1
+            foreach ($r in $d.Repas) {
+                $n = $r.NbLignes; $r1 = $ligne; $r2 = $ligne + $n - 1
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $r1 -C1 $cRepas -L2 $r2 -C2 $cRepas -Valeur ([string]$r.Nom).ToUpperInvariant()) -Fond $Script:CouleurLavande -Couleur $blanc -Gras
+                for ($i = 0; $i -lt $n; $i++) {
+                    $l = $r1 + $i
+                    $ws.Row($l).Height = 16
+                    if ($i -lt $r.Lignes.Count) {
+                        $a = $r.Lignes[$i]
+                        $ws.Cells[$l, $cAliment].Value = [string]$a.aliment_nom
+                        $ws.Cells[$l, $cQte].Value = "$($a.quantite) $($a.unite)".Trim()
+                        $j = 0; foreach ($k in 'kcal_calc', 'proteines_calc', 'glucides_calc', 'lipides_calc', 'fibres_calc') { $ws.Cells[$l, ($cKcal + $j)].Value = [double](Format-Nutri $a.$k); $j++ }
+                    }
+                }
+                Set-StyleExcel -Plage $ws.Cells[$r1, $cAliment, $r2, $cAliment] -Couleur '#000000' -Taille 10 -Gauche
+                Set-StyleExcel -Plage $ws.Cells[$r1, $cQte, $r2, ($cKcal + 4)] -Couleur '#000000'
+                Set-BordureExcel -Plage $ws.Cells[$r1, $cAliment, $r2, ($cKcal + 4)] -Cotes @('Bottom') -Couleur $Script:CouleurGrisClair -Epaisseur 'Thin'
+                # Totaux du repas : PRO / GLU / LIP / FIB repartis sur la hauteur du repas, kcal sur toute la hauteur
+                $groupes = Get-RepartitionTotaux -NbLignes $n
+                $debut = $r1
+                for ($g = 0; $g -lt 4; $g++) {
+                    $fin = $debut + $groupes[$g] - 1
+                    Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $debut -C1 $cEtiq -L2 $fin -C2 $cEtiq -Valeur $etiquettes[$g][0]) -Fond $Script:CouleurLilas -Couleur $blanc -Gras
+                    Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $debut -C1 $cVal -L2 $fin -C2 $cVal -Valeur ([double](Format-Nutri $r.Totaux.($etiquettes[$g][1])))) -Couleur '#000000' -Gras
+                    Set-BordureExcel -Plage $ws.Cells[$fin, $cEtiq, $fin, $cVal] -Cotes @('Bottom') -Couleur $Script:CouleurGrisClair -Epaisseur 'Thin'
+                    $debut = $fin + 1
+                }
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $r1 -C1 $cKcalRepas -L2 $r2 -C2 $cKcalRepas -Valeur ([double](Format-Nutri $r.Totaux.Kcal))) -Couleur '#000000' -Gras -Taille 10
+                Set-BordureExcel -Plage $ws.Cells[$r2, $cRepas, $r2, $cKcalRepas] -Cotes @('Bottom') -Couleur $Script:CouleurViolet
+                $ligne = $r2 + 1
+            }
+            if ($d.Repas.Count -eq 0) {
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $ligne -C1 $cRepas -L2 $ligne -C2 $cKcalRepas -Valeur 'Aucun repas pour ce type de jour.') -Couleur '#999999' -Italique
+                $ligne++
+            }
+            # Cadre du tableau
+            Set-BordureExcel -Plage $ws.Cells[$l1, $cRepas, ($ligne - 1), $cRepas] -Cotes @('Left') -Couleur $Script:CouleurViolet
+            Set-BordureExcel -Plage $ws.Cells[$l1, $cKcalRepas, ($ligne - 1), $cKcalRepas] -Cotes @('Right') -Couleur $Script:CouleurViolet
+
+            # Encadre RECAP du jour
+            Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $cRecap -L2 $l2 -C2 ($cRecap + 1) -Valeur 'RECAP') -Fond $Script:CouleurViolet -Couleur $blanc -Gras
+            $lr = $l2 + 1
+            foreach ($x in @(,@('KCAL', 'Kcal')) + $etiquettes) {
+                $ws.Cells[$lr, $cRecap].Value = $x[0]
+                $ws.Cells[$lr, ($cRecap + 1)].Value = [double](Format-Nutri $t.($x[1]))
+                Set-StyleExcel -Plage $ws.Cells[$lr, $cRecap] -Fond $Script:CouleurLilas -Couleur $blanc -Gras
+                Set-StyleExcel -Plage $ws.Cells[$lr, ($cRecap + 1)] -Couleur '#000000' -Gras -Taille 12
+                Set-BordureExcel -Plage $ws.Cells[$lr, $cRecap, $lr, ($cRecap + 1)] -Cotes @('Bottom') -Couleur $Script:CouleurGrisClair -Epaisseur 'Thin'
+                $lr++
+            }
+            Set-BordureExcel -Plage $ws.Cells[$l1, $cRecap, ($lr - 1), ($cRecap + 1)] -Cotes @('Left', 'Right') -Couleur $Script:CouleurViolet
+            Set-BordureExcel -Plage $ws.Cells[($lr - 1), $cRecap, ($lr - 1), ($cRecap + 1)] -Cotes @('Bottom') -Couleur $Script:CouleurViolet
+
+            $ligne = [math]::Max($ligne, $lr) + 2
+        }
+        $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
+        $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 0
+    } finally {
+        Close-ExcelPackage $pkg
+    }
 }
 
 Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, `

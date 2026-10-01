@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.19.0] - 2026-10-01
+
+### Modifié
+- **Export Excel du plan nutrition** : même présentation que l'onglet NUTRITION d'origine (et que l'export PDF) — titre et notes du plan, un tableau "PLAN JOURNALIER" par type de jour avec la ligne TOTAL du jour (violet foncé), colonnes Repas / Aliments / Quantité / KCAL / PRO / GLU / LIP / FIB, repas en bande lavande (cellules fusionnées), totaux PRO/GLU/LIP/FIB et kcal de chaque repas à droite, et un encadré RECAP du jour à côté. Valeurs numériques (arrondies à l'unité), impression en paysage sur la largeur d'une page.
+
 ## [1.18.0] - 2026-10-01
 
 ### Modifié
