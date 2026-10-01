@@ -240,9 +240,10 @@ function Import-QuestionnaireDepuisExcel {
 
     $resultat = [ordered]@{ Importees = 0; Rattachees = 0; NonRattachees = 0; FichesCompletees = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
     $clients = @(Get-Clients -DbPath $DbPath -InclureArchives)
-    # -AsText evite qu'un numero de telephone (souvent commencant par 0) soit lu comme un nombre et perde son 0 initial
-    $colonnesTexte = @()
-    if ($ColonneTelephone) { $colonnesTexte = @($ColonneTelephone) }
+    # -AsText lit les cellules telles qu'affichees dans Excel : evite qu'un numero de telephone (souvent commencant
+    # par 0) soit lu comme un nombre et perde son 0 initial. Applique a toutes les colonnes (le telephone peut se
+    # trouver dans une colonne non indiquee dans l'assistant, ex. questionnaire bilan), sauf la date qui doit rester une date.
+    $colonnesTexte = @(Get-EnTetesExcel -ExcelPath $ExcelPath | Where-Object { $_ -ne $ColonneDate })
     $lignes = if (Test-EstCsv $ExcelPath) {
         # Export CSV de Google Forms/Sheets : tout est deja du texte (le 0 initial des telephones est conserve).
         @(Import-Csv -Path $ExcelPath -Delimiter (Get-SeparateurCsv $ExcelPath) -Encoding UTF8)

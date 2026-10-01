@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.15.3] - 2026-10-01
+
+### Corrigé
+- Suivi > Questionnaires : à l'import d'un fichier Excel, un numéro de téléphone perdait son 0 initial (0612345678 → 612345678) quand sa colonne n'était pas indiquée dans l'assistant d'import (notamment pour les questionnaires bilan). Toutes les colonnes sont désormais lues telles qu'affichées dans Excel ; seule la colonne de date reste interprétée comme une date.
+
 ## [1.15.2] - 2026-10-01
 
 ### Corrigé
