@@ -6,6 +6,11 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.15.1] - 2026-10-01
+
+### Corrigé
+- Administratif > Commandes : créer une commande directement (sans passer par « Transformer un devis en commande ») provoquait une erreur « variable DevisIdPourCommande non définie ». La variable est désormais initialisée au démarrage.
+
 ## [1.15.0] - 2026-09-29
 
 ### Ajouté

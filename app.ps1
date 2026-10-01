@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.15.0'
+$AppVersion = '1.15.1'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -605,6 +605,7 @@ $CmbCommandeFiltre.Add_SelectionChanged({ Update-VueCommandes })
         Update-VueAdministratif
     }
 })
+$Script:DevisIdPourCommande = $null
 (Get-Ctrl 'BtnDevisTransformer').Add_Click({
     Invoke-Protege {
         $item = $GridDevis.SelectedItem
