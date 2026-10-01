@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.15.3'
+$AppVersion = '1.16.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -62,27 +62,36 @@ function Invoke-Protege {
     try {
         & $Bloc
     } catch {
+        # Saisie invalide (nombre mal tape...) : message de correction simple, pas une "erreur" technique.
+        if ($_.Exception.Data.Contains('SaisieInvalide')) { Show-Erreur $_.Exception.Message 'Saisie invalide'; return }
         Show-Erreur "Une erreur est survenue :`n`n$($_.Exception.Message)"
     }
+}
+function Stop-SaisieInvalide { param([string]$Message)
+    $ex = New-Object System.FormatException $Message
+    $ex.Data['SaisieInvalide'] = $true
+    throw $ex
 }
 function Get-TexteOuNull { param([string]$Texte)
     if ([string]::IsNullOrWhiteSpace($Texte)) { return $null }
     return $Texte.Trim()
 }
-function Get-DoubleOuNull { param([string]$Texte)
+function Get-DoubleOuNull { param([string]$Texte, [string]$Champ)
     if ([string]::IsNullOrWhiteSpace($Texte)) { return $null }
     $valeur = 0.0
     # Les espaces (y compris insecables) servent de separateur de milliers en francais : "10 000" -> 10000
     if ([double]::TryParse(($Texte -replace '\s', '').Replace(',', '.'), [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$valeur)) {
         return $valeur
     }
-    throw "'$Texte' n'est pas un nombre valide."
+    $ou = if ($Champ) { " dans le champ « $Champ »" } else { '' }
+    Stop-SaisieInvalide "« $($Texte.Trim()) » n'est pas un nombre valide$ou.`n`nIndique uniquement des chiffres, avec une virgule pour les décimales (ex : 12,5)."
 }
-function Get-IntOuNull { param([string]$Texte)
+function Get-IntOuNull { param([string]$Texte, [string]$Champ)
     if ([string]::IsNullOrWhiteSpace($Texte)) { return $null }
     $valeur = 0
     if ([int]::TryParse(($Texte -replace '\s', ''), [ref]$valeur)) { return $valeur }
-    throw "'$Texte' n'est pas un nombre entier valide."
+    $ou = if ($Champ) { " dans le champ « $Champ »" } else { '' }
+    Stop-SaisieInvalide "« $($Texte.Trim()) » n'est pas un nombre entier valide$ou.`n`nIndique uniquement des chiffres, sans virgule (ex : 3 ou 10000)."
 }
 
 $estPremierLancement = -not (Test-Path $DbPath)
@@ -282,8 +291,11 @@ function Show-DialogSeriesExercice {
     if ($existantes.Count -gt 0) {
         foreach ($s in $existantes) { Add-LigneDialogSerie -Repetitions ([string]$s.repetitions) -Charge ([string]$s.charge) -Recup ([string]$s.recuperation_s) }
     } else {
+        # Fourchette "3-4" -> 4 lignes (le maximum, comme la feuille de seance Excel) : une serie en trop se retire d'un clic.
         $nombreSeries = 0
-        if ($SeriesDefaut -and ($SeriesDefaut -match '\d+')) { $nombreSeries = [int]$Matches[0] }
+        $nombres = @([regex]::Matches([string]$SeriesDefaut, '\d+') | ForEach-Object { [int]$_.Value })
+        if ($nombres.Count -gt 0) { $nombreSeries = ($nombres | Measure-Object -Maximum).Maximum }
+        if ($nombreSeries -gt 20) { $nombreSeries = 20 }
         if ($nombreSeries -lt 1) { $nombreSeries = 3 }
         for ($i = 0; $i -lt $nombreSeries; $i++) { Add-LigneDialogSerie -Repetitions $RepetitionsDefaut -Charge $ChargeDefaut -Recup $RecupDefaut }
     }
@@ -582,7 +594,7 @@ $CmbCommandeFiltre.Add_SelectionChanged({ Update-VueCommandes })
     Invoke-Protege {
         if (-not $CmbDevisClient.SelectedItem) { Show-Erreur "Selectionne un client."; return }
         if ([string]::IsNullOrWhiteSpace($TxtDevisPrestations.Text)) { Show-Erreur "Les prestations sont obligatoires."; return }
-        $montant = Get-DoubleOuNull $TxtDevisMontant.Text
+        $montant = Get-DoubleOuNull $TxtDevisMontant.Text -Champ Montant
         if (-not $montant) { Show-Erreur "Indique un montant valide."; return }
         New-Devis -DbPath $DbPath -ClientId $CmbDevisClient.SelectedItem.id -Prestations $TxtDevisPrestations.Text.Trim() `
             -Montant $montant -Duree (Get-TexteOuNull $TxtDevisDuree.Text) | Out-Null
@@ -628,7 +640,7 @@ $Script:DevisIdPourCommande = $null
         if (-not $CmbCommandeType.SelectedItem) { Show-Erreur "Selectionne un type de facturation."; return }
         if (-not $DateCommandeDebut.SelectedDate) { Show-Erreur "Indique une date de debut."; return }
         $type = $CmbCommandeType.SelectedItem.Content
-        $montant = Get-DoubleOuNull $TxtCommandeMontant.Text
+        $montant = Get-DoubleOuNull $TxtCommandeMontant.Text -Champ Montant
         if (-not $montant) { Show-Erreur "Indique un montant valide."; return }
         if ($type -ne 'one_shot' -and -not $DateCommandeFin.SelectedDate) {
             Show-Erreur "Une date de fin est necessaire pour une facturation mensuelle ou hebdomadaire."; return
@@ -862,13 +874,13 @@ $GridAliments.Add_SelectionChanged({
         if ([string]::IsNullOrWhiteSpace($TxtAlimentNom.Text)) { Show-Erreur "Le nom est obligatoire."; return }
         $alimentArgs = @{
             Nom = $TxtAlimentNom.Text.Trim()
-            QuantiteReference = (Get-DoubleOuNull $TxtAlimentQuantite.Text)
+            QuantiteReference = (Get-DoubleOuNull $TxtAlimentQuantite.Text -Champ Quantité de référence)
             Unite = (Get-TexteOuNull $TxtAlimentUnite.Text)
-            Kcal = (Get-DoubleOuNull $TxtAlimentKcal.Text)
-            Proteines = (Get-DoubleOuNull $TxtAlimentProteines.Text)
-            Glucides = (Get-DoubleOuNull $TxtAlimentGlucides.Text)
-            Lipides = (Get-DoubleOuNull $TxtAlimentLipides.Text)
-            Fibres = (Get-DoubleOuNull $TxtAlimentFibres.Text)
+            Kcal = (Get-DoubleOuNull $TxtAlimentKcal.Text -Champ Kcal)
+            Proteines = (Get-DoubleOuNull $TxtAlimentProteines.Text -Champ Protéines)
+            Glucides = (Get-DoubleOuNull $TxtAlimentGlucides.Text -Champ Glucides)
+            Lipides = (Get-DoubleOuNull $TxtAlimentLipides.Text -Champ Lipides)
+            Fibres = (Get-DoubleOuNull $TxtAlimentFibres.Text -Champ Fibres)
         }
         if ($Script:SelectedAlimentId) {
             Update-Aliment -DbPath $DbPath -Id $Script:SelectedAlimentId @alimentArgs
@@ -1077,9 +1089,18 @@ $GridModeleExercices.Add_SelectionChanged({
                 -RecuperationS (Get-TexteOuNull $TxtModExARecup.Text) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Variante (Get-TexteOuNull $TxtModExAVariante.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text)
         } else {
             if (-not $CmbModeleExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
-            New-SeanceModeleExercice -DbPath $DbPath -SeanceModeleId $ListeModeles.SelectedItem.id -ExerciceId $CmbModeleExerciceAAjouter.SelectedItem.id `
-                -Series (Get-TexteOuNull $TxtModExASeries.Text) -Repetitions (Get-TexteOuNull $TxtModExARepetitions.Text) -Charge (Get-TexteOuNull $TxtModExACharge.Text) `
-                -RecuperationS (Get-TexteOuNull $TxtModExARecup.Text) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Variante (Get-TexteOuNull $TxtModExAVariante.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text) | Out-Null
+            $nomExercice = [string]$CmbModeleExerciceAAjouter.SelectedItem.affichage
+            $series = $TxtModExASeries.Text; $reps = $TxtModExARepetitions.Text; $charge = $TxtModExACharge.Text; $recup = $TxtModExARecup.Text
+            $nouvelId = New-SeanceModeleExercice -DbPath $DbPath -SeanceModeleId $ListeModeles.SelectedItem.id -ExerciceId $CmbModeleExerciceAAjouter.SelectedItem.id `
+                -Series (Get-TexteOuNull $series) -Repetitions (Get-TexteOuNull $reps) -Charge (Get-TexteOuNull $charge) `
+                -RecuperationS (Get-TexteOuNull $recup) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Variante (Get-TexteOuNull $TxtModExAVariante.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text)
+            Update-VueModeleExercices
+            # Detail par serie par defaut (comme dans Programmes) : fenetre pre-remplie, Annuler = valeurs uniformes.
+            Show-DialogSeriesExercice -Contexte 'Modele' -ExerciceLigneId ([int]$nouvelId) -NomExercice $nomExercice `
+                -SeriesDefaut $series -RepetitionsDefaut $reps -ChargeDefaut $charge -RecupDefaut $recup | Out-Null
+            Update-VueModeleExercices
+            $GridModeleExercices.SelectedItem = $GridModeleExercices.Items | Where-Object { [int]$_.id -eq [int]$nouvelId }
+            return
         }
         Update-VueModeleExercices
     }
@@ -1337,9 +1358,18 @@ $GridSeanceExercices.Add_SelectionChanged({
                 -RecuperationS (Get-TexteOuNull $TxtExARecup.Text) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Variante (Get-TexteOuNull $TxtExAVariante.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text)
         } else {
             if (-not $CmbExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
-            New-SeanceExercice -DbPath $DbPath -SeanceId $ListeSeances.SelectedItem.id -ExerciceId $CmbExerciceAAjouter.SelectedItem.id `
-                -Series (Get-TexteOuNull $TxtExASeries.Text) -Repetitions (Get-TexteOuNull $TxtExARepetitions.Text) -Charge (Get-TexteOuNull $TxtExACharge.Text) `
-                -RecuperationS (Get-TexteOuNull $TxtExARecup.Text) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Variante (Get-TexteOuNull $TxtExAVariante.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text) | Out-Null
+            $nomExercice = [string]$CmbExerciceAAjouter.SelectedItem.affichage
+            $series = $TxtExASeries.Text; $reps = $TxtExARepetitions.Text; $charge = $TxtExACharge.Text; $recup = $TxtExARecup.Text
+            $nouvelId = New-SeanceExercice -DbPath $DbPath -SeanceId $ListeSeances.SelectedItem.id -ExerciceId $CmbExerciceAAjouter.SelectedItem.id `
+                -Series (Get-TexteOuNull $series) -Repetitions (Get-TexteOuNull $reps) -Charge (Get-TexteOuNull $charge) `
+                -RecuperationS (Get-TexteOuNull $recup) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Variante (Get-TexteOuNull $TxtExAVariante.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text)
+            Update-VueSeanceExercices
+            # Detail par serie par defaut : la fenetre s'ouvre pre-remplie (une ligne par serie). Annuler = valeurs uniformes.
+            Show-DialogSeriesExercice -Contexte 'Programme' -ExerciceLigneId ([int]$nouvelId) -NomExercice $nomExercice `
+                -SeriesDefaut $series -RepetitionsDefaut $reps -ChargeDefaut $charge -RecupDefaut $recup | Out-Null
+            Update-VueSeanceExercices
+            $GridSeanceExercices.SelectedItem = $GridSeanceExercices.Items | Where-Object { [int]$_.id -eq [int]$nouvelId }
+            return
         }
         Update-VueSeanceExercices
     }
@@ -1527,7 +1557,7 @@ $ListeRepas.Add_SelectionChanged({ Update-VueRepasAliments })
     Invoke-Protege {
         if (-not $ListeRepas.SelectedItem) { Show-Erreur "Selectionne d'abord un repas."; return }
         if (-not $CmbAlimentAAjouter.SelectedItem) { Show-Erreur "Selectionne un aliment dans la liste."; return }
-        $quantite = Get-DoubleOuNull $TxtQuantiteAliment.Text
+        $quantite = Get-DoubleOuNull $TxtQuantiteAliment.Text -Champ Quantité
         if (-not $quantite) { Show-Erreur "Indique une quantite valide."; return }
         New-RepasAliment -DbPath $DbPath -RepasId $ListeRepas.SelectedItem.id -AlimentId $CmbAlimentAAjouter.SelectedItem.id -Quantite $quantite | Out-Null
         $TxtQuantiteAliment.Text = '100'
@@ -1831,14 +1861,14 @@ $GridRoadmap.Add_SelectionChanged({
 (Get-Ctrl 'BtnRoadmapEnregistrer').Add_Click({
     Invoke-Protege {
         if (-not $CmbSuiviClient.SelectedItem) { Show-Erreur "Sélectionne d'abord un client."; return }
-        $semaine = Get-IntOuNull $TxtRoadmapSemaine.Text
+        $semaine = Get-IntOuNull $TxtRoadmapSemaine.Text -Champ Semaine
         if (-not $semaine) { Show-Erreur "Indique un numéro de semaine."; return }
         $dateDebut = if ($DateRoadmapDebut.SelectedDate) { $DateRoadmapDebut.SelectedDate.ToString('yyyy-MM-dd') } else { $null }
         $roadmapArgs = @{
             SemaineNumero = $semaine; DateDebut = $dateDebut; Phase = (Get-TexteOuNull $TxtRoadmapPhase.Text)
-            Nutrition = (Get-TexteOuNull $TxtRoadmapNutrition.Text); PoidsMoyen = (Get-DoubleOuNull $TxtRoadmapPoidsMoyen.Text)
-            DepenseCalorique = (Get-DoubleOuNull $TxtRoadmapDepense.Text); CardioMinutes = (Get-DoubleOuNull $TxtRoadmapCardio.Text)
-            Pas = (Get-IntOuNull $TxtRoadmapPas.Text); PrecisionTraining = (Get-TexteOuNull $TxtRoadmapPrecisionTraining.Text)
+            Nutrition = (Get-TexteOuNull $TxtRoadmapNutrition.Text); PoidsMoyen = (Get-DoubleOuNull $TxtRoadmapPoidsMoyen.Text -Champ Poids moyen)
+            DepenseCalorique = (Get-DoubleOuNull $TxtRoadmapDepense.Text -Champ Dépense calorique); CardioMinutes = (Get-DoubleOuNull $TxtRoadmapCardio.Text -Champ Cardio)
+            Pas = (Get-IntOuNull $TxtRoadmapPas.Text -Champ Pas); PrecisionTraining = (Get-TexteOuNull $TxtRoadmapPrecisionTraining.Text)
             Evenements = (Get-TexteOuNull $TxtRoadmapEvenements.Text); Notes = (Get-TexteOuNull $TxtRoadmapNotes.Text)
         }
         if ($Script:SelectedRoadmapId) {

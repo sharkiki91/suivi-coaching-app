@@ -6,6 +6,17 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.16.0] - 2026-10-01
+
+### Ajouté
+- Programmes et Bibliothèques > Modèles de séance : le détail par série est désormais proposé par défaut. Dès qu'un exercice est ajouté à une séance (ou à un modèle), la fenêtre "Détail par série" s'ouvre automatiquement, pré-remplie avec une ligne par série et les valeurs saisies : il suffit d'ajuster les séries qui diffèrent puis de valider. Cliquer sur Annuler garde l'exercice avec des valeurs identiques à chaque série. L'exercice ajouté reste sélectionné, case "Détail par série" à jour.
+
+### Modifié
+- Pour une fourchette de séries ("3-4"), la fenêtre de détail par série propose désormais le maximum (4 lignes, comme la feuille de séance Excel) au lieu du minimum.
+
+### Corrigé
+- Un nombre mal saisi (ex. "abc" dans un montant) affichait "Une erreur est survenue" comme s'il s'agissait d'un plantage. Il affiche maintenant une fenêtre "Saisie invalide" qui indique le champ concerné et le format attendu (ex. « abc » n'est pas un nombre valide dans le champ « Montant » — ex : 12,5).
+
 ## [1.15.3] - 2026-10-01
 
 ### Corrigé
