@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.19.0'
+$AppVersion = '1.20.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -1283,7 +1283,7 @@ $GridSeanceExercices.Add_SelectionChanged({
         $dialog.FileName = "Feuille_de_seance.xlsx"
         if ($dialog.ShowDialog()) {
             Export-FeuilleSeanceExcel -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Path $dialog.FileName
-            Show-Info "Feuille de séance créée (même présentation que ton onglet TRAINING : programme à gauche, 6 blocs SÉANCE à droite).`n`nEnvoie-la à ton client : à chaque séance, il note la DATE en haut d'un bloc puis ses répétitions et charges série par série. Réimporte-la ensuite via Suivi > Séances réalisées (chaque bloc daté devient une séance réalisée)."
+            Show-Info "Feuille de séance créée (même présentation que ton onglet TRAINING : programme à gauche, 6 blocs SÉANCE à droite ; un onglet par séance, chacun s'imprime en entier sur une page).`n`nEnvoie-la à ton client : à chaque séance, il note la DATE en haut d'un bloc puis ses répétitions et charges série par série. Réimporte-la ensuite via Suivi > Séances réalisées (chaque bloc daté devient une séance réalisée)."
         }
     }
 })

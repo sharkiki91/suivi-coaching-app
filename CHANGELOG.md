@@ -6,6 +6,12 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.20.0] - 2026-10-01
+
+### Modifié
+- **Feuille de séance Excel** (et Excel du programme) : **un onglet par séance**, nommé comme la séance, au lieu d'un seul onglet avec toutes les séances à la suite. Chaque onglet est réglé pour s'imprimer en entier sur **une seule page** paysage : un tableau de séance n'est plus jamais coupé en deux à l'impression. Le titre et la consigne sont répétés sur chaque onglet. L'import des séances réalisées lit tous les onglets (les feuilles déjà envoyées, en un seul onglet ou au format tableau, restent importables).
+- **PDF du programme** : une séance n'est plus coupée entre deux pages — si elle ne tient pas en bas de la page, elle commence sur la suivante. Lignes de séries légèrement resserrées pour qu'une séance de 8 exercices tienne sur la même page que l'en-tête.
+
 ## [1.19.0] - 2026-10-01
 
 ### Modifié

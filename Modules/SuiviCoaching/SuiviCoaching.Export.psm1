@@ -133,13 +133,13 @@ WHERE p.id = @Id
     .semaine th { background: $v; color: #fff; font-size: 11px; padding: 5px; border: 1px solid #fff; }
     .semaine td { text-align: center; font-weight: bold; color: $v; padding: 8px 4px; border: 1px solid $sep; font-size: 11px; }
     .semaine td.repos { color: #999; font-weight: normal; }
-    .bloc { display: flex; margin-bottom: 16px; border: 2px solid $v; }
+    .bloc { display: flex; margin-bottom: 16px; border: 2px solid $v; break-inside: avoid; page-break-inside: avoid; }   /* une seance n'est jamais coupee entre deux pages */
     .bloc .bande { background: $lav; color: #fff; font-size: 17px; font-weight: bold; width: 46px; min-width: 46px; border-right: 2px solid $v; display: flex; align-items: center; justify-content: center; }
     .bloc .bande div { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; text-align: center; }
     .bloc .bande .jour { font-size: 11px; font-weight: normal; }
     .seance { flex: 1; }
     .seance th { background: $v; color: #fff; font-size: 10px; font-weight: bold; padding: 6px 3px; border-right: 2px solid $sep; text-transform: uppercase; }
-    .seance td { text-align: center; vertical-align: middle; font-weight: bold; font-size: 11px; padding: 3px 4px; }
+    .seance td { text-align: center; vertical-align: middle; font-weight: bold; font-size: 10.5px; padding: 1px 4px; line-height: 1.25; }
     .seance td.num { background: $v; color: #fff; width: 26px; }
     .seance td.violet { color: $v; text-transform: uppercase; }
     .seance td.nom { width: 24%; }
@@ -323,6 +323,7 @@ function Export-FeuilleSeanceExcel {
         (une ligne par serie : #, exercice, variante, set, reps, charge, recup, tempo, muscle, lien)
         et, a droite, 6 blocs "SEANCE 1..6" cote a cote (DATE, puis REPS / CHARGE par serie et NOTES
         par exercice) pour noter 6 seances successives. La partie programme reste figee a l'ecran.
+        Un onglet par seance (nomme comme la seance), imprime en entier sur une seule page paysage.
 
         La colonne A (masquee) contient des reperes techniques ("D|seanceId" sur la ligne des dates,
         "S|seanceId|seanceExerciceId|serie" sur chaque ligne de serie) relus par
@@ -354,29 +355,41 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
     if (Test-Path $Path) { Remove-Item $Path -Force }
     $pkg = Open-ExcelPackage -Path $Path -Create
     try {
-        $ws = Add-Worksheet -ExcelPackage $pkg -WorksheetName 'TRAINING'
-        $ws.View.ShowGridLines = $false
-        $ws.Column(1).Hidden = $true
-        $ws.Column($cB).Width = 6
-        $i = 0; foreach ($k in $colonnesProgramme.Keys) { $ws.Column($cDebut + $i).Width = $colonnesProgramme[$k]; $i++ }
-        $ws.Column($cFin + 1).Width = 2.5
-        for ($b = 0; $b -lt $NbBlocs; $b++) {
-            $c0 = $cPremierBloc + $b * $largeurBloc
-            $ws.Column($c0).Width = 4; $ws.Column($c0 + 1).Width = 7; $ws.Column($c0 + 2).Width = 8; $ws.Column($c0 + 3).Width = 16; $ws.Column($c0 + 4).Width = 2.5
-        }
-
-        # Titre + consigne
         $titre = "PROGRAMME $($prog.nom) - $($prog.client_prenom) $($prog.client_nom)".ToUpperInvariant()
-        Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 1 -C1 $cB -L2 1 -C2 $cFin -Valeur $titre) -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Taille 12 -Gras
-        $ws.Row(1).Height = 24
         $consigne = if ($NbBlocs -gt 0) { "A chaque seance : note la DATE en haut d'un bloc SEANCE, puis tes repetitions et la charge serie par serie (et une note si besoin). Seance suivante = bloc suivant." } else { $TexteConsigne }
-        Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 2 -C1 $cB -L2 2 -C2 $cFin -Valeur $consigne) -Couleur $Script:CouleurViolet -Italique -Gauche
-        $ws.Row(2).Height = 26
+        $nomsOnglets = @{}
 
-        $ligne = 4
+        # Un onglet par seance : chaque tableau s'imprime en entier sur une seule page, sans etre coupe en deux.
         foreach ($s in $seances) {
             $exercices = @(Get-SeanceExercices -DbPath $DbPath -SeanceId ([int]$s.id))
             if ($exercices.Count -eq 0) { continue }
+
+            # Nom d'onglet Excel : 31 caracteres max, sans [ ] : * ? / \, et unique
+            $nomOnglet = (([string]$s.nom) -replace '[\[\]:*?/\\]', '-').Trim()
+            if (-not $nomOnglet) { $nomOnglet = 'Seance' }
+            if ($nomOnglet.Length -gt 28) { $nomOnglet = $nomOnglet.Substring(0, 28).Trim() }
+            $base = $nomOnglet; $k = 2
+            while ($nomsOnglets.ContainsKey($nomOnglet.ToUpperInvariant())) { $nomOnglet = "$base ($k)"; $k++ }
+            $nomsOnglets[$nomOnglet.ToUpperInvariant()] = $true
+
+            $ws = Add-Worksheet -ExcelPackage $pkg -WorksheetName $nomOnglet
+            $ws.View.ShowGridLines = $false
+            $ws.Column(1).Hidden = $true
+            $ws.Column($cB).Width = 6
+            $i = 0; foreach ($k in $colonnesProgramme.Keys) { $ws.Column($cDebut + $i).Width = $colonnesProgramme[$k]; $i++ }
+            $ws.Column($cFin + 1).Width = 2.5
+            for ($b = 0; $b -lt $NbBlocs; $b++) {
+                $c0 = $cPremierBloc + $b * $largeurBloc
+                $ws.Column($c0).Width = 4; $ws.Column($c0 + 1).Width = 7; $ws.Column($c0 + 2).Width = 8; $ws.Column($c0 + 3).Width = 16; $ws.Column($c0 + 4).Width = 2.5
+            }
+
+            # Titre + consigne (repetes sur chaque onglet)
+            Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 1 -C1 $cB -L2 1 -C2 $cFin -Valeur $titre) -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Taille 12 -Gras
+            $ws.Row(1).Height = 24
+            Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 2 -C1 $cB -L2 2 -C2 $cFin -Valeur $consigne) -Couleur $Script:CouleurViolet -Italique -Gauche
+            $ws.Row(2).Height = 26
+
+            $ligne = 4
             $lTitre = $ligne; $lDate = $ligne + 1; $lEntete = $ligne + 2
             $ws.Cells[$lDate, 1].Value = "D|$($s.id)"
             $ws.Row($lTitre).Height = 18; $ws.Row($lDate).Height = 20; $ws.Row($lEntete).Height = 18
@@ -469,13 +482,21 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
             if ($s.jour_semaine) { $nomSeance += " ($(([string]$s.jour_semaine).ToUpperInvariant()))" }
             Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lTitre -C1 $cB -L2 ($ligne - 1) -C2 $cB -Valeur $nomSeance) -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras -Taille 14 -Rotation 90
             Set-BordureExcel -Plage $ws.Cells[$lTitre, $cB, ($ligne - 1), $cB] -Cotes @('Right') -Couleur $Script:CouleurViolet
-            $ligne += 2
+
+            # La partie programme reste visible quand on fait defiler les blocs SEANCE vers la droite
+            if ($NbBlocs -gt 0) { $ws.View.FreezePanes(1, ($cFin + 2)) }
+            # Impression : tout l'onglet (donc toute la seance) sur une seule page paysage
+            $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
+            $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 1
+            $ws.PrinterSettings.HorizontalCentered = $true
+            $ws.PrinterSettings.TopMargin = 0.4; $ws.PrinterSettings.BottomMargin = 0.4; $ws.PrinterSettings.LeftMargin = 0.3; $ws.PrinterSettings.RightMargin = 0.3
         }
 
-        # La partie programme reste visible quand on fait defiler les blocs SEANCE vers la droite
-        if ($NbBlocs -gt 0) { $ws.View.FreezePanes(1, ($cFin + 2)) }
-        $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
-        $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 0
+        # Un classeur Excel doit contenir au moins un onglet
+        if ($nomsOnglets.Count -eq 0) {
+            $ws = Add-Worksheet -ExcelPackage $pkg -WorksheetName 'TRAINING'
+            $ws.Cells[1, 2].Value = 'Aucune seance avec des exercices dans ce programme.'
+        }
     } finally {
         Close-ExcelPackage $pkg
     }

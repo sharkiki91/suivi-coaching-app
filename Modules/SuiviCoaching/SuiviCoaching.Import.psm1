@@ -593,6 +593,8 @@ function Import-SeanceRealiseeDepuisExcel {
     $resultat = [ordered]@{ Importees = 0; IgnoreesSansDate = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
 
     # Format actuel (v1.17+) : feuille "TRAINING" calquee sur le fichier du coach, reperee par la colonne A masquee.
+    # Un onglet par seance (v1.20+) ; les feuilles v1.17-1.19 avaient toutes les seances dans un seul onglet.
+    $formatCoachTrouve = $false
     $pkg = Open-ExcelPackage -Path $ExcelPath
     try {
         foreach ($ws in $pkg.Workbook.Worksheets) {
@@ -601,12 +603,13 @@ function Import-SeanceRealiseeDepuisExcel {
             for ($r = 1; $r -le [math]::Min($ws.Dimension.End.Row, 30); $r++) { if ([string]$ws.Cells[$r, 1].Value -like 'D|*') { $estFormatCoach = $true; break } }
             if ($estFormatCoach) {
                 Import-FeuilleSeanceFormatCoach -DbPath $DbPath -ClientId $ClientId -Ws $ws -Resultat $resultat
-                return [pscustomobject]$resultat
+                $formatCoachTrouve = $true
             }
         }
     } finally {
         Close-ExcelPackage $pkg -NoSave
     }
+    if ($formatCoachTrouve) { return [pscustomobject]$resultat }
 
     # Ancien format (une ligne par serie, en tableau) : feuilles deja envoyees aux clients avant la v1.17.
     $lignes = @(Import-Excel -Path $ExcelPath)
