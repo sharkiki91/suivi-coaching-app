@@ -38,26 +38,6 @@ function ConvertTo-PdfDepuisHtml {
     }
 }
 
-function Get-StyleHtmlBase {
-    return @"
-<style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #222; margin: 30px; }
-    h1 { color: #2C3E50; margin-bottom: 0; }
-    .sous-titre { color: #666; margin-top: 4px; margin-bottom: 24px; }
-    h2 { color: #2C3E50; border-bottom: 2px solid #2C3E50; padding-bottom: 4px; margin-top: 28px; }
-    h3 { color: #27AE60; margin-bottom: 6px; }
-    table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-    th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 13px; vertical-align: top; }
-    th { background-color: #2C3E50; color: white; }
-    tr:nth-child(even) { background-color: #F5F7FA; }
-    .totaux { font-weight: bold; background-color: #E8F6EF; }
-    .notes { font-style: italic; color: #555; margin-top: 4px; }
-    .miniature-exercice { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; display: block; }
-    .lien-video { color: #27AE60; font-weight: bold; text-decoration: none; white-space: nowrap; }
-</style>
-"@
-}
-
 function HtmlEncode { param([string]$Texte) [System.Net.WebUtility]::HtmlEncode($Texte) }
 
 function Get-ImageDataUri {
@@ -117,29 +97,6 @@ function Get-ValeurSeriePrevue {
     $ligneSerie = $SeriesDetail | Where-Object { [int]$_.numero_serie -eq $NumeroSerie } | Select-Object -First 1
     if ($ligneSerie -and $ligneSerie.$NomChamp) { return [string]$ligneSerie.$NomChamp }
     return $ValeurGlobale
-}
-
-function Get-ValeurAvecDetailSeriesHtml {
-    <#
-        Variante HTML de Get-ValeurAvecDetailSeries pour l'export PDF : si un detail par serie a
-        ete saisi, une ligne par serie (separees par <br>, valeurs deja HTML-encodees) au lieu
-        d'une seule ligne separee par " / " ; sinon la valeur globale (encodee).
-    #>
-    param(
-        [array] $SeriesDetail,
-        [string] $ValeurGlobale,
-        [string] $NomChamp,
-        [string] $Suffixe = ''
-    )
-    if ($SeriesDetail -and $SeriesDetail.Count -gt 0) {
-        $valeurs = @($SeriesDetail | ForEach-Object { $_.$NomChamp })
-        $nonVides = @($valeurs | Where-Object { $_ })
-        if ($nonVides.Count -gt 0) {
-            return (($valeurs | ForEach-Object { if ($_) { "$(HtmlEncode ([string]$_))$Suffixe" } else { '-' } }) -join '<br>')
-        }
-    }
-    if (-not $ValeurGlobale) { return '' }
-    return "$(HtmlEncode $ValeurGlobale)$Suffixe"
 }
 
 # ================= PROGRAMMES =================
@@ -289,30 +246,12 @@ function Export-ProgrammeExcel {
         [Parameter(Mandatory)] [string] $Path
     )
 
-    $seances = @(Get-Seances -DbPath $DbPath -ProgrammeId $ProgrammeId)
-    $lignes = New-Object System.Collections.Generic.List[object]
-    foreach ($s in $seances) {
-        $exercices = @(Get-SeanceExercices -DbPath $DbPath -SeanceId ([int]$s.id))
-        foreach ($e in $exercices) {
-            $detailSeries = @(Get-SeanceExerciceSeries -DbPath $DbPath -SeanceExerciceId ([int]$e.id))
-            $nbSeries = if ($detailSeries.Count -gt 0) { $detailSeries.Count } else { $e.series }
-            $lignes.Add([pscustomobject]@{
-                Seance = $s.nom
-                Exercice = $e.exercice_nom
-                Variante = $e.variante
-                'Muscle cible' = $e.muscle_cible
-                Series = $nbSeries
-                Repetitions = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.repetitions -NomChamp 'repetitions')
-                Charge = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.charge -NomChamp 'charge')
-                'Recup (s)' = (Get-ValeurAvecDetailSeries -SeriesDetail $detailSeries -ValeurGlobale $e.recuperation_s -NomChamp 'recuperation_s')
-                Tempo = $e.tempo
-                'Lien video' = $e.lien_video
-                Notes = $e.notes
-            })
-        }
-    }
-    if (Test-Path $Path) { Remove-Item $Path -Force }
-    $lignes | Export-Excel -Path $Path -WorksheetName 'Programme' -AutoSize -TableStyle Medium2 -FreezeTopRow
+    # Meme presentation que la feuille de seance (onglet TRAINING d'origine), sans les blocs de suivi
+    $prog = Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT notes, date_debut FROM programmes WHERE id = @Id" -SqlParameters @{ Id = $ProgrammeId }
+    $morceaux = @()
+    if ($prog.date_debut) { $morceaux += "Debut le $(([datetime]$prog.date_debut).ToString('dd/MM/yyyy'))" }
+    if ($prog.notes) { $morceaux += [string]$prog.notes }
+    Export-FeuilleSeanceExcel -DbPath $DbPath -ProgrammeId $ProgrammeId -Path $Path -NbBlocs 0 -TexteConsigne ($morceaux -join ' - ')
 }
 
 # --- Charte graphique du fichier d'origine du coach (onglet TRAINING de "SUIVI 2.0.xlsx") ---
@@ -388,11 +327,16 @@ function Export-FeuilleSeanceExcel {
         La colonne A (masquee) contient des reperes techniques ("D|seanceId" sur la ligne des dates,
         "S|seanceId|seanceExerciceId|serie" sur chaque ligne de serie) relus par
         Import-SeanceRealiseeDepuisExcel : ne pas la supprimer.
+
+        -NbBlocs 0 produit le programme seul (meme presentation, sans les blocs de suivi) : utilise
+        par Export-ProgrammeExcel, avec -TexteConsigne pour la ligne d'explication sous le titre.
     #>
     param(
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $ProgrammeId,
-        [Parameter(Mandatory)] [string] $Path
+        [Parameter(Mandatory)] [string] $Path,
+        [int] $NbBlocs = $Script:NbBlocsSuivi,
+        [string] $TexteConsigne
     )
 
     $prog = Invoke-SqliteQuery -DataSource $DbPath -Query @"
@@ -416,7 +360,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
         $ws.Column($cB).Width = 6
         $i = 0; foreach ($k in $colonnesProgramme.Keys) { $ws.Column($cDebut + $i).Width = $colonnesProgramme[$k]; $i++ }
         $ws.Column($cFin + 1).Width = 2.5
-        for ($b = 0; $b -lt $Script:NbBlocsSuivi; $b++) {
+        for ($b = 0; $b -lt $NbBlocs; $b++) {
             $c0 = $cPremierBloc + $b * $largeurBloc
             $ws.Column($c0).Width = 4; $ws.Column($c0 + 1).Width = 7; $ws.Column($c0 + 2).Width = 8; $ws.Column($c0 + 3).Width = 16; $ws.Column($c0 + 4).Width = 2.5
         }
@@ -425,7 +369,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
         $titre = "PROGRAMME $($prog.nom) - $($prog.client_prenom) $($prog.client_nom)".ToUpperInvariant()
         Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 1 -C1 $cB -L2 1 -C2 $cFin -Valeur $titre) -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Taille 12 -Gras
         $ws.Row(1).Height = 24
-        $consigne = "A chaque seance : note la DATE en haut d'un bloc SEANCE, puis tes repetitions et la charge serie par serie (et une note si besoin). Seance suivante = bloc suivant."
+        $consigne = if ($NbBlocs -gt 0) { "A chaque seance : note la DATE en haut d'un bloc SEANCE, puis tes repetitions et la charge serie par serie (et une note si besoin). Seance suivante = bloc suivant." } else { $TexteConsigne }
         Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 2 -C1 $cB -L2 2 -C2 $cFin -Valeur $consigne) -Couleur $Script:CouleurViolet -Italique -Gauche
         $ws.Row(2).Height = 26
 
@@ -446,7 +390,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
                 $i++
             }
             # Blocs SEANCE n : titre, ligne DATE a remplir, en-tetes
-            for ($b = 0; $b -lt $Script:NbBlocsSuivi; $b++) {
+            for ($b = 0; $b -lt $NbBlocs; $b++) {
                 $c0 = $cPremierBloc + $b * $largeurBloc
                 Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lTitre -C1 $c0 -L2 $lTitre -C2 ($c0 + 3) -Valeur "SEANCE $($b + 1)") -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras -Taille 10
                 Set-StyleExcel -Plage $ws.Cells[$lDate, $c0] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras -Taille 7
@@ -506,7 +450,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
                 Set-BordureExcel -Plage $ws.Cells[$l1, $cDebut, $l2, $cFin] -Cotes @('Right') -Couleur $Script:CouleurSeparateur -Epaisseur 'Thin'
                 Set-BordureExcel -Plage $ws.Cells[$l2, $cDebut, $l2, $cFin] -Cotes @('Bottom')
 
-                for ($b = 0; $b -lt $Script:NbBlocsSuivi; $b++) {
+                for ($b = 0; $b -lt $NbBlocs; $b++) {
                     $c0 = $cPremierBloc + $b * $largeurBloc
                     foreach ($sr in $series) { $ws.Cells[($l1 + $sr.Numero - 1), $c0].Value = $sr.Numero }
                     Set-StyleExcel -Plage $ws.Cells[$l1, $c0, $l2, $c0] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras
@@ -529,7 +473,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
         }
 
         # La partie programme reste visible quand on fait defiler les blocs SEANCE vers la droite
-        $ws.View.FreezePanes(1, $cFin + 2)
+        if ($NbBlocs -gt 0) { $ws.View.FreezePanes(1, ($cFin + 2)) }
         $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
         $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 0
     } finally {
@@ -538,6 +482,36 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
 }
 
 # ================= NUTRITION =================
+
+# --- Charte de l'onglet NUTRITION d'origine ---
+$Script:CouleurVioletFonce = '#351C75'  # ligne "PLAN JOURNALIER / TOTAL"
+$Script:CouleurLilas = '#B4A7D6'        # en-tetes KCAL..FIB et etiquettes PRO/GLU/LIP/FIB
+$Script:CouleurGrisClair = '#D9D9D9'    # traits entre les aliments
+
+function Format-Nutri { param($Valeur) if ($null -eq $Valeur -or "$Valeur" -eq '') { return '' }; return [string][math]::Round([double]$Valeur) }
+
+function Get-DonneesJourNutrition {
+    <#
+        Prepare un type de jour pour l'export : repas (avec au moins 4 lignes, comme le fichier
+        d'origine, pour loger les totaux PRO/GLU/LIP/FIB du repas), totaux par repas et totaux du jour.
+    #>
+    param([Parameter(Mandatory)] [string] $DbPath, [Parameter(Mandatory)] [int] $TypeJourId)
+    $jour = [pscustomobject]@{ Kcal = 0.0; Proteines = 0.0; Glucides = 0.0; Lipides = 0.0; Fibres = 0.0 }
+    $repasListe = foreach ($r in @(Get-Repas -DbPath $DbPath -TypeJourId $TypeJourId)) {
+        $lignes = @(Get-RepasAliments -DbPath $DbPath -RepasId ([int]$r.id))
+        $tot = Get-TotauxRepas -Lignes $lignes
+        foreach ($k in 'Kcal', 'Proteines', 'Glucides', 'Lipides', 'Fibres') { $jour.$k += $tot.$k }
+        [pscustomobject]@{ Nom = [string]$r.nom; Lignes = $lignes; Totaux = $tot; NbLignes = [math]::Max(4, $lignes.Count) }
+    }
+    [pscustomobject]@{ Repas = @($repasListe); Totaux = $jour }
+}
+
+function Get-RepartitionTotaux {
+    <# Repartit $NbLignes lignes en 4 groupes (PRO, GLU, LIP, FIB) : retourne la taille de chaque groupe. #>
+    param([int] $NbLignes)
+    $base = [math]::Floor($NbLignes / 4); $reste = $NbLignes % 4
+    [int[]]@(0..3 | ForEach-Object { [int]($base + $(if ($_ -lt $reste) { 1 } else { 0 })) })   # [int] : IndexOf compare ensuite a un [int]
+}
 
 function Export-PlanNutritionPdf {
     param(
@@ -553,39 +527,80 @@ WHERE pn.id = @Id
 "@ -SqlParameters @{ Id = $PlanNutritionId })
 
     $typesJour = @(Get-TypesJour -DbPath $DbPath -PlanNutritionId $PlanNutritionId)
+    $v = $Script:CouleurViolet; $lav = $Script:CouleurLavande; $vf = $Script:CouleurVioletFonce; $lil = $Script:CouleurLilas; $gc = $Script:CouleurGrisClair
 
+    # Mise en page calquee sur l'onglet NUTRITION du fichier d'origine du coach.
+    $style = @"
+<style>
+    @page { size: A4 landscape; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; color: #000; margin: 0; font-size: 11px; }
+    .entete { background: $v; color: #fff; padding: 10px 14px; font-weight: bold; font-size: 18px; letter-spacing: .5px; }
+    .entete .client { font-size: 13px; font-weight: normal; margin-top: 3px; }
+    .notes-plan { color: $v; font-style: italic; margin: 8px 2px 12px; }
+    .jour { display: flex; gap: 18px; align-items: flex-start; margin-bottom: 18px; break-inside: avoid; }
+    table { border-collapse: collapse; }
+    .plan { flex: 1; table-layout: fixed; border: 2px solid $v; }
+    .plan th, .plan td { text-align: center; vertical-align: middle; padding: 3px 4px; }
+    .plan .l1 th { background: $vf; color: #fff; font-size: 11px; padding: 6px 4px; }
+    .plan .l2 th { background: $v; color: #fff; font-size: 10px; }
+    .plan .l2 th.nut { background: $lil; }
+    .plan td { font-size: 11px; border-bottom: 1px solid $gc; }
+    .plan td.aliment { text-align: left; }
+    .plan td.repas { background: $lav; color: #fff; font-weight: bold; font-size: 11px; text-transform: uppercase; border-bottom: none; }
+    .plan td.etiq { background: $lil; color: #fff; font-weight: bold; font-size: 10px; }
+    .plan td.tot { font-weight: bold; }
+    .plan tbody.repas-bloc { break-inside: avoid; }
+    .plan tbody.repas-bloc + tbody.repas-bloc { border-top: 2px solid $v; }
+    .recap { width: 170px; border: 2px solid $v; }
+    .recap th { background: $v; color: #fff; padding: 10px 4px; font-size: 11px; }
+    .recap td { padding: 9px 6px; text-align: center; font-weight: bold; border-bottom: 1px solid $gc; }
+    .recap td.etiq { background: $lil; color: #fff; font-size: 10px; width: 50%; }
+    .vide { color: #999; font-style: italic; }
+</style>
+"@
     $sb = New-Object System.Text.StringBuilder
-    [void]$sb.Append("<html><head><meta charset='utf-8'>$(Get-StyleHtmlBase)</head><body>")
-    [void]$sb.Append("<h1>Plan nutritionnel</h1>")
-    [void]$sb.Append("<div class='sous-titre'>$(HtmlEncode $plan.nom) &mdash; $(HtmlEncode $plan.client_prenom) $(HtmlEncode $plan.client_nom)")
-    if ($plan.date_debut) { [void]$sb.Append(" &mdash; debut le $(HtmlEncode $plan.date_debut)") }
-    [void]$sb.Append("</div>")
-    if ($plan.notes) { [void]$sb.Append("<p class='notes'>$(HtmlEncode $plan.notes)</p>") }
+    [void]$sb.Append("<html><head><meta charset='utf-8'>$style</head><body>")
+    [void]$sb.Append("<div class='entete'>PLAN NUTRITION $(HtmlEncode ([string]$plan.nom).ToUpperInvariant())")
+    $sousTitre = "$(HtmlEncode $plan.client_prenom) $(HtmlEncode $plan.client_nom)"
+    if ($plan.date_debut) { $sousTitre += " &mdash; d&eacute;but le $(HtmlEncode ([datetime]$plan.date_debut).ToString('dd/MM/yyyy'))" }
+    [void]$sb.Append("<div class='client'>$sousTitre</div></div>")
+    if ($plan.notes) { [void]$sb.Append("<p class='notes-plan'>$(HtmlEncode $plan.notes)</p>") } else { [void]$sb.Append("<div style='height:10px'></div>") }
 
+    $etiquettes = @(@('PRO', 'Proteines'), @('GLU', 'Glucides'), @('LIP', 'Lipides'), @('FIB', 'Fibres'))
     foreach ($tj in $typesJour) {
-        [void]$sb.Append("<h2>$(HtmlEncode $tj.nom)</h2>")
-        $repasListe = @(Get-Repas -DbPath $DbPath -TypeJourId ([int]$tj.id))
-        $totalJour = [pscustomobject]@{ Kcal = 0.0; Proteines = 0.0; Glucides = 0.0; Lipides = 0.0; Fibres = 0.0 }
-
-        foreach ($r in $repasListe) {
-            [void]$sb.Append("<h3>$(HtmlEncode $r.nom)</h3>")
-            $lignes = @(Get-RepasAliments -DbPath $DbPath -RepasId ([int]$r.id))
-            if ($lignes.Count -eq 0) {
-                [void]$sb.Append("<p class='notes'>Aucun aliment dans ce repas.</p>")
-                continue
+        $d = Get-DonneesJourNutrition -DbPath $DbPath -TypeJourId ([int]$tj.id)
+        $t = $d.Totaux
+        [void]$sb.Append("<div class='jour'><table class='plan'><colgroup><col style='width:11%'><col style='width:25%'><col style='width:10%'><col style='width:8%'><col style='width:7%'><col style='width:7%'><col style='width:7%'><col style='width:7%'><col style='width:7%'><col style='width:6%'><col style='width:7%'></colgroup>")
+        [void]$sb.Append("<thead><tr class='l1'><th colspan='2'>PLAN JOURNALIER &mdash; $(HtmlEncode ([string]$tj.nom).ToUpperInvariant())</th><th>TOTAL</th><th>$(Format-Nutri $t.Kcal)</th><th>$(Format-Nutri $t.Proteines)</th><th>$(Format-Nutri $t.Glucides)</th><th>$(Format-Nutri $t.Lipides)</th><th>$(Format-Nutri $t.Fibres)</th><th colspan='3'></th></tr>")
+        [void]$sb.Append("<tr class='l2'><th>REPAS</th><th>ALIMENTS</th><th>QUANTIT&Eacute;</th><th class='nut'>KCAL</th><th class='nut'>PRO</th><th class='nut'>GLU</th><th class='nut'>LIP</th><th class='nut'>FIB</th><th colspan='3'>TOTAUX</th></tr></thead>")
+        if ($d.Repas.Count -eq 0) { [void]$sb.Append("<tbody><tr><td colspan='11' class='vide'>Aucun repas pour ce type de jour.</td></tr></tbody>") }
+        foreach ($r in $d.Repas) {
+            $n = $r.NbLignes
+            $groupes = Get-RepartitionTotaux -NbLignes $n
+            [int[]]$debutsGroupes = @(0, $groupes[0], ($groupes[0] + $groupes[1]), ($groupes[0] + $groupes[1] + $groupes[2]))
+            [void]$sb.Append("<tbody class='repas-bloc'>")
+            for ($i = 0; $i -lt $n; $i++) {
+                [void]$sb.Append('<tr>')
+                if ($i -eq 0) { [void]$sb.Append("<td class='repas' rowspan='$n'>$(HtmlEncode $r.Nom)</td>") }
+                if ($i -lt $r.Lignes.Count) {
+                    $l = $r.Lignes[$i]
+                    [void]$sb.Append("<td class='aliment'>$(HtmlEncode $l.aliment_nom)</td><td>$($l.quantite) $(HtmlEncode $l.unite)</td><td>$(Format-Nutri $l.kcal_calc)</td><td>$(Format-Nutri $l.proteines_calc)</td><td>$(Format-Nutri $l.glucides_calc)</td><td>$(Format-Nutri $l.lipides_calc)</td><td>$(Format-Nutri $l.fibres_calc)</td>")
+                } else {
+                    [void]$sb.Append("<td class='aliment'>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td>")
+                }
+                $g = [array]::IndexOf($debutsGroupes, $i)
+                if ($g -ge 0 -and $groupes[$g] -gt 0) {
+                    [void]$sb.Append("<td class='etiq' rowspan='$($groupes[$g])'>$($etiquettes[$g][0])</td><td class='tot' rowspan='$($groupes[$g])'>$(Format-Nutri $r.Totaux.($etiquettes[$g][1]))</td>")
+                }
+                if ($i -eq 0) { [void]$sb.Append("<td class='tot' rowspan='$n'>$(Format-Nutri $r.Totaux.Kcal)<br><span style='font-weight:normal;font-size:9px'>kcal</span></td>") }
+                [void]$sb.Append('</tr>')
             }
-            [void]$sb.Append("<table><tr><th>Aliment</th><th>Quantite</th><th>Kcal</th><th>Proteines</th><th>Glucides</th><th>Lipides</th><th>Fibres</th></tr>")
-            $totalRepas = Get-TotauxRepas -Lignes $lignes
-            foreach ($l in $lignes) {
-                [void]$sb.Append("<tr><td>$(HtmlEncode $l.aliment_nom)</td><td>$($l.quantite) $(HtmlEncode $l.unite)</td><td>$($l.kcal_calc)</td><td>$($l.proteines_calc)</td><td>$($l.glucides_calc)</td><td>$($l.lipides_calc)</td><td>$($l.fibres_calc)</td></tr>")
-            }
-            [void]$sb.Append("<tr class='totaux'><td>Total repas</td><td></td><td>$($totalRepas.Kcal)</td><td>$($totalRepas.Proteines)</td><td>$($totalRepas.Glucides)</td><td>$($totalRepas.Lipides)</td><td>$($totalRepas.Fibres)</td></tr>")
-            [void]$sb.Append("</table>")
-            $totalJour.Kcal += $totalRepas.Kcal; $totalJour.Proteines += $totalRepas.Proteines
-            $totalJour.Glucides += $totalRepas.Glucides; $totalJour.Lipides += $totalRepas.Lipides; $totalJour.Fibres += $totalRepas.Fibres
+            [void]$sb.Append('</tbody>')
         }
-
-        [void]$sb.Append("<table><tr class='totaux'><td>TOTAL JOURNEE</td><td>$($totalJour.Kcal) kcal</td><td>Proteines : $($totalJour.Proteines) g</td><td>Glucides : $($totalJour.Glucides) g</td><td>Lipides : $($totalJour.Lipides) g</td><td>Fibres : $($totalJour.Fibres) g</td></tr></table>")
+        [void]$sb.Append("</table><table class='recap'><tr><th colspan='2'>RECAP</th></tr>")
+        foreach ($x in @(,@('KCAL', 'Kcal')) + $etiquettes) { [void]$sb.Append("<tr><td class='etiq'>$($x[0])</td><td>$(Format-Nutri $t.($x[1]))</td></tr>") }
+        [void]$sb.Append("</table></div>")
     }
     [void]$sb.Append("</body></html>")
 
@@ -632,4 +647,4 @@ function Export-PlanNutritionExcel {
 }
 
 Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, `
-    Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries, Get-ValeurAvecDetailSeriesHtml
+    Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries

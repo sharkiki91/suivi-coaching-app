@@ -6,6 +6,12 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.18.0] - 2026-10-01
+
+### Modifié
+- **Export Excel du programme** : même présentation que la feuille de séance (onglet TRAINING d'origine : bande violette au nom de la séance, une ligne par série, cellules fusionnées par exercice, couleurs et polices du fichier du coach), sans les 6 blocs de suivi. La date de début et les notes du programme figurent sous le titre.
+- **Export PDF du plan nutrition** : nouvelle mise en page calquée sur l'onglet NUTRITION d'origine — un tableau "PLAN JOURNALIER" par type de jour avec la ligne TOTAL du jour (violet foncé), colonnes Repas / Aliments / Quantité / KCAL / PRO / GLU / LIP / FIB, repas en bande lavande, totaux PRO/GLU/LIP/FIB et kcal de chaque repas sur la droite, et un encadré RECAP du jour. Valeurs arrondies à l'unité comme dans l'original, A4 paysage.
+
 ## [1.17.0] - 2026-10-01
 
 ### Modifié
