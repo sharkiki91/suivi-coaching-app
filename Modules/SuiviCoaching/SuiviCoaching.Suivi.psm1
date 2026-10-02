@@ -11,25 +11,32 @@ function Get-SuiviQuotidien {
 }
 
 function Set-SuiviQuotidienJour {
-    <# Insere ou met a jour (upsert) la ligne de suivi d'un client pour une date donnee, sans toucher aux autres dates. #>
+    <#
+        Insere ou met a jour (upsert) la ligne de suivi d'un client pour une date donnee, sans toucher aux autres dates.
+        Une valeur non renseignee ($null ou texte vide) est enregistree vide (NULL), jamais 0 : un poids non pese
+        ne doit pas apparaitre comme "0 kg".
+    #>
     param(
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $ClientId,
         [Parameter(Mandatory)] [string] $Date,
-        [double] $Poids,
-        [double] $SommeilHeures,
-        [int] $QualiteSommeil,
-        [string] $HeureCoucher,
-        [string] $HeureLever,
-        [int] $Energie,
-        [int] $AdhesionNutrition,
-        [int] $Digestion,
-        [int] $NbPas,
-        [double] $CardioMinutes,
-        [int] $Motivation,
-        [int] $TensionSystolique,
-        [int] $TensionDiastolique,
-        [string] $Bilan
+        [Nullable[double]] $Poids,
+        [Nullable[double]] $SommeilHeures,
+        [Nullable[int]] $QualiteSommeil,
+        $HeureCoucher,
+        $HeureLever,
+        [Nullable[int]] $Energie,
+        [Nullable[int]] $AdhesionNutrition,
+        [bool] $JourNonTracke,
+        [Nullable[int]] $Digestion,
+        $Seance,
+        [Nullable[int]] $NbPas,
+        [Nullable[double]] $CardioMinutes,
+        [Nullable[int]] $Motivation,
+        [Nullable[int]] $FcRepos,
+        [Nullable[int]] $TensionSystolique,
+        [Nullable[int]] $TensionDiastolique,
+        $Bilan
     )
     <#
         SQLite embarque dans Windows PowerShell 5.1 (via PSSQLite) est une version ancienne (3.8.x)
@@ -37,19 +44,25 @@ function Set-SuiviQuotidienJour {
         On utilise donc INSERT OR REPLACE, compatible avec toutes les versions : la ligne en conflit
         (meme client_id + date, grace a la contrainte UNIQUE) est supprimee puis reinseree.
     #>
+    $texte = { param($v) if ($null -eq $v -or [string]::IsNullOrWhiteSpace([string]$v)) { [DBNull]::Value } else { ([string]$v).Trim() } }
+    $nombre = { param($v) if ($null -eq $v) { [DBNull]::Value } else { $v } }
     $query = @"
 INSERT OR REPLACE INTO suivi_quotidien (id, client_id, date, poids, sommeil_heures, qualite_sommeil, heure_coucher, heure_lever,
-    energie, adhesion_nutrition, digestion, nb_pas, cardio_minutes, motivation, tension_systolique, tension_diastolique, bilan)
+    energie, adhesion_nutrition, jour_non_tracke, digestion, seance, nb_pas, cardio_minutes, motivation, fc_repos,
+    tension_systolique, tension_diastolique, bilan)
 VALUES (
     (SELECT id FROM suivi_quotidien WHERE client_id = @ClientId AND date = @Date),
     @ClientId, @Date, @Poids, @SommeilHeures, @QualiteSommeil, @HeureCoucher, @HeureLever,
-    @Energie, @AdhesionNutrition, @Digestion, @NbPas, @CardioMinutes, @Motivation, @TensionSystolique, @TensionDiastolique, @Bilan)
+    @Energie, @AdhesionNutrition, @JourNonTracke, @Digestion, @Seance, @NbPas, @CardioMinutes, @Motivation, @FcRepos,
+    @TensionSystolique, @TensionDiastolique, @Bilan)
 "@
     Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{
-        ClientId = $ClientId; Date = $Date; Poids = $Poids; SommeilHeures = $SommeilHeures; QualiteSommeil = $QualiteSommeil
-        HeureCoucher = $HeureCoucher; HeureLever = $HeureLever; Energie = $Energie; AdhesionNutrition = $AdhesionNutrition
-        Digestion = $Digestion; NbPas = $NbPas; CardioMinutes = $CardioMinutes; Motivation = $Motivation
-        TensionSystolique = $TensionSystolique; TensionDiastolique = $TensionDiastolique; Bilan = $Bilan
+        ClientId = $ClientId; Date = $Date; Poids = (& $nombre $Poids); SommeilHeures = (& $nombre $SommeilHeures)
+        QualiteSommeil = (& $nombre $QualiteSommeil); HeureCoucher = (& $texte $HeureCoucher); HeureLever = (& $texte $HeureLever)
+        Energie = (& $nombre $Energie); AdhesionNutrition = (& $nombre $AdhesionNutrition); JourNonTracke = [int]$JourNonTracke
+        Digestion = (& $nombre $Digestion); Seance = (& $texte $Seance); NbPas = (& $nombre $NbPas)
+        CardioMinutes = (& $nombre $CardioMinutes); Motivation = (& $nombre $Motivation); FcRepos = (& $nombre $FcRepos)
+        TensionSystolique = (& $nombre $TensionSystolique); TensionDiastolique = (& $nombre $TensionDiastolique); Bilan = (& $texte $Bilan)
     }
 }
 

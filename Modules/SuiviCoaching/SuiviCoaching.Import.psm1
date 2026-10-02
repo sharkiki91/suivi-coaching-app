@@ -300,54 +300,77 @@ function Import-QuestionnaireDepuisExcel {
 function Export-ModeleTrackingExcel {
     <#
         Genere le modele de suivi quotidien a envoyer au client : l'onglet TRACKING (52 semaines, dates
-        deja remplies a partir de -DateDebut, lundi de la semaine en cours par defaut). C'est le meme
-        onglet que celui inclus dans la feuille de seance (Programmes > Exporter la feuille de seance).
+        deja remplies a partir du lundi de la semaine de -DateDebut, semaine en cours par defaut), avec
+        les colonnes et la case BILAN choisies par le coach (-DbPath). C'est le meme onglet que celui
+        inclus dans la feuille de seance (Programmes > Exporter la feuille de seance).
     #>
     param(
         [Parameter(Mandatory)] [string] $Path,
+        [string] $DbPath,
         [datetime] $DateDebut = (Get-LundiCetteSemaine)
     )
+    $reglages = if ($DbPath) { Get-ReglagesTracking -DbPath $DbPath } else { $null }
     if (Test-Path $Path) { Remove-Item $Path -Force }
     $pkg = Open-ExcelPackage -Path $Path -Create
     try {
-        Add-OngletTrackingExcel -Pkg $pkg -DateDebut $DateDebut.Date
+        if ($reglages) {
+            Add-OngletTrackingExcel -Pkg $pkg -DateDebut $DateDebut.Date -Colonnes $reglages.Colonnes -AvecBilan $reglages.AvecBilan -LienBilan $reglages.LienBilan
+        } else {
+            Add-OngletTrackingExcel -Pkg $pkg -DateDebut $DateDebut.Date
+        }
     } finally {
         Close-ExcelPackage $pkg
     }
 }
 
+function Get-CleTrackingDepuisEntete {
+    <# Cle du catalogue TRACKING correspondant a un en-tete de colonne (libelle actuel ou ancien nom), 'date', ou $null. #>
+    param([string] $Entete)
+    $n = Get-TexteNormalise $Entete
+    if (-not $n) { return $null }
+    if ($n -eq 'date') { return 'date' }
+    foreach ($def in Get-CatalogueTracking) {
+        if ((Get-TexteNormalise $def.Libelle) -eq $n) { return $def.Cle }
+        foreach ($ancien in $def.Anciens) { if ((Get-TexteNormalise $ancien) -eq $n) { return $def.Cle } }
+    }
+    return $null
+}
+
+function ConvertTo-HeureImport {
+    <# "23:00" reste "23:00" ; une heure lue comme fraction de jour Excel (0.958...) redevient "23:00". #>
+    param($Valeur)
+    if ($Valeur -is [double] -and $Valeur -ge 0 -and $Valeur -lt 1) { return [TimeSpan]::FromDays($Valeur).ToString('hh\:mm') }
+    if ($Valeur -is [datetime]) { return $Valeur.ToString('HH:mm') }
+    return Get-TexteImportOuNull $Valeur
+}
+
 function Import-LigneTracking {
     <#
-        Enregistre une ligne de suivi quotidien (objet dont les proprietes portent les noms de colonnes
-        du modele : 'Date', 'Poids (kg)'...). Une ligne sans aucune valeur saisie (date seule, deja
-        pre-remplie dans le modele) est ignoree sans bruit ; une ligne remplie sans date est comptee.
+        Enregistre un jour de suivi a partir de $Valeurs (hashtable cle du catalogue TRACKING -> valeur
+        lue, plus 'date'). Seules les colonnes presentes dans le fichier sont renseignees, les autres
+        restent vides. Un jour sans aucune valeur saisie (date seule, deja pre-remplie dans le modele)
+        est ignore sans bruit ; un jour rempli sans date est compte dans IgnoresSansDate.
     #>
-    param([string] $DbPath, [int] $ClientId, $Ligne, $Resultat)
+    param([string] $DbPath, [int] $ClientId, [hashtable] $Valeurs, $Resultat)
 
-    # Une colonne supprimee par le client ne doit pas faire echouer toute la ligne : elle est simplement vide.
-    $v = { param([string]$Nom) Get-ValeurColonne $Ligne $Nom }
-    if ([string](& $v 'Bilan') -like 'Exemple de ligne a remplacer*') { return }
-    $champs = @('Poids (kg)', 'Sommeil (h)', 'Qualite sommeil (1-5)', 'Heure coucher', 'Heure lever', 'Energie (1-5)',
-        'Adhesion nutrition (1-5)', 'Digestion (1-5)', 'Nb pas', 'Cardio (min)', 'Motivation (1-5)',
-        'Tension systolique', 'Tension diastolique', 'Bilan')
-    $renseigne = $false
-    foreach ($c in $champs) { if (Get-TexteImportOuNull (& $v $c)) { $renseigne = $true; break } }
-    if (-not $renseigne) { return }
-    $dateIso = ConvertTo-DateIso (& $v 'Date')
+    if ([string]$Valeurs['bilan'] -like 'Exemple de ligne a remplacer*') { return }
+    $parametres = @{}
+    foreach ($def in Get-CatalogueTracking) {
+        if (-not $Valeurs.ContainsKey($def.Cle)) { continue }
+        $brut = $Valeurs[$def.Cle]
+        $valeur = switch ($def.Type) {
+            'heure'  { ConvertTo-HeureImport $brut }
+            'texte'  { Get-TexteImportOuNull $brut }
+            'ouinon' { if ([string]$brut -match '^\s*(x|oui|o|1|vrai|true)\s*$') { $true } else { $null } }
+            default  { ConvertTo-DoubleTolerant $brut }
+        }
+        if ($null -ne $valeur) { $parametres[$def.Param] = $valeur }
+    }
+    if ($parametres.Count -eq 0) { return }
+    $dateIso = ConvertTo-DateIso $Valeurs['date']
     if (-not $dateIso) { $Resultat.IgnoresSansDate++; return }
     try {
-        Set-SuiviQuotidienJour -DbPath $DbPath -ClientId $ClientId -Date $dateIso `
-            -Poids (ConvertTo-DoubleTolerant (& $v 'Poids (kg)')) `
-            -SommeilHeures (ConvertTo-DoubleTolerant (& $v 'Sommeil (h)')) `
-            -QualiteSommeil (ConvertTo-DoubleTolerant (& $v 'Qualite sommeil (1-5)')) `
-            -HeureCoucher ([string](& $v 'Heure coucher')) -HeureLever ([string](& $v 'Heure lever')) `
-            -Energie (ConvertTo-DoubleTolerant (& $v 'Energie (1-5)')) `
-            -AdhesionNutrition (ConvertTo-DoubleTolerant (& $v 'Adhesion nutrition (1-5)')) `
-            -Digestion (ConvertTo-DoubleTolerant (& $v 'Digestion (1-5)')) `
-            -NbPas (ConvertTo-DoubleTolerant (& $v 'Nb pas')) -CardioMinutes (ConvertTo-DoubleTolerant (& $v 'Cardio (min)')) `
-            -Motivation (ConvertTo-DoubleTolerant (& $v 'Motivation (1-5)')) `
-            -TensionSystolique (ConvertTo-DoubleTolerant (& $v 'Tension systolique')) -TensionDiastolique (ConvertTo-DoubleTolerant (& $v 'Tension diastolique')) `
-            -Bilan ([string](& $v 'Bilan'))
+        Set-SuiviQuotidienJour -DbPath $DbPath -ClientId $ClientId -Date $dateIso @parametres
         $Resultat.Importes++
     } catch {
         $Resultat.Erreurs.Add("Suivi du $dateIso : $($_.Exception.Message)")
@@ -356,30 +379,29 @@ function Import-LigneTracking {
 
 function Import-TrackingOngletCoach {
     <#
-        Lit un onglet TRACKING genere par Add-OngletTrackingExcel : ligne d'en-tetes reperee par "T|" en
-        colonne A (masquee), puis une ligne "J|" par jour. Chaque valeur est retrouvee par son en-tete.
+        Lit un onglet TRACKING genere par Add-OngletTrackingExcel : chaque ligne d'en-tetes est reperee
+        par "T|" en colonne A (masquee), chaque jour par "J|". Chaque valeur est retrouvee par son
+        en-tete, donc quelles que soient les colonnes choisies a l'export (bandes de theme, JOUR, BILAN
+        et MOYENNE sont ignores).
     #>
     param([string] $DbPath, [int] $ClientId, $Ws, $Resultat)
 
     $finLigne = $Ws.Dimension.End.Row; $finCol = $Ws.Dimension.End.Column
-    $entetes = @{}
+    $colonnes = @{}   # numero de colonne -> cle du catalogue
     for ($r = 1; $r -le $finLigne; $r++) {
         $repere = [string]$Ws.Cells[$r, 1].Value
         if ($repere -like 'T|*') {
-            $entetes = @{}
+            $colonnes = @{}
             for ($c = 2; $c -le $finCol; $c++) {
-                $nom = ([string]$Ws.Cells[$r, $c].Text).Trim()
-                if ($nom) { $entetes[$c] = $nom }
+                $cle = Get-CleTrackingDepuisEntete ([string]$Ws.Cells[$r, $c].Text)
+                if ($cle) { $colonnes[$c] = $cle }
             }
             continue
         }
-        if ($repere -notlike 'J|*' -or $entetes.Count -eq 0) { continue }
-        $valeurs = [ordered]@{}
-        foreach ($c in $entetes.Keys) {
-            # Heures saisies malgre tout en format heure : on garde le texte affiche ("23:00")
-            $valeurs[$entetes[$c]] = if ($entetes[$c] -like 'Heure*') { $Ws.Cells[$r, $c].Text } else { $Ws.Cells[$r, $c].Value }
-        }
-        Import-LigneTracking -DbPath $DbPath -ClientId $ClientId -Ligne ([pscustomobject]$valeurs) -Resultat $Resultat
+        if ($repere -notlike 'J|*' -or $colonnes.Count -eq 0) { continue }
+        $valeurs = @{}
+        foreach ($c in $colonnes.Keys) { $valeurs[$colonnes[$c]] = $Ws.Cells[$r, $c].Value }
+        Import-LigneTracking -DbPath $DbPath -ClientId $ClientId -Valeurs $valeurs -Resultat $Resultat
     }
 }
 
@@ -413,7 +435,12 @@ function Import-TrackingDepuisExcel {
     $lignes = @(Import-Excel -Path $ExcelPath)
     Test-ColonnesRequises -Lignes $lignes -Colonnes @('Date') -DescriptionFichier 'un suivi quotidien (modele a telecharger depuis l''application)'
     foreach ($ligne in $lignes) {
-        Import-LigneTracking -DbPath $DbPath -ClientId $ClientId -Ligne $ligne -Resultat $resultat
+        $valeurs = @{}
+        foreach ($prop in $ligne.PSObject.Properties) {
+            $cle = Get-CleTrackingDepuisEntete $prop.Name
+            if ($cle) { $valeurs[$cle] = $prop.Value }
+        }
+        Import-LigneTracking -DbPath $DbPath -ClientId $ClientId -Valeurs $valeurs -Resultat $resultat
     }
     return [pscustomobject]$resultat
 }

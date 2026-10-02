@@ -262,11 +262,50 @@ $Script:CouleurLigneSerie = '#D9D2E9' # trait leger entre deux series (zones a r
 $Script:NbBlocsSuivi = 12             # nombre de semaines a noter cote a cote (une seance par semaine et par bloc)
 $Script:NbBlocsParPage = 6            # a l'impression : programme + 6 semaines par page
 $Script:NbSemainesTracking = 52       # onglet TRACKING : un an de suivi quotidien
-# En-tetes de l'onglet TRACKING = noms de colonnes du modele de suivi quotidien (l'import retrouve chaque valeur par son en-tete)
-$Script:ColonnesTracking = [ordered]@{
-    'Poids (kg)' = 8; 'Sommeil (h)' = 8; 'Qualite sommeil (1-5)' = 9; 'Heure coucher' = 8; 'Heure lever' = 8
-    'Energie (1-5)' = 8; 'Adhesion nutrition (1-5)' = 10; 'Digestion (1-5)' = 9; 'Nb pas' = 8; 'Cardio (min)' = 8
-    'Motivation (1-5)' = 9; 'Tension systolique' = 9; 'Tension diastolique' = 9; 'Bilan' = 40
+# Colonnes possibles de l'onglet TRACKING, dans l'ordre et par theme comme l'onglet TRACKING d'origine du coach.
+# Le coach choisit lesquelles exporter (Get-ReglagesTracking) ; l'import retrouve chaque valeur par son
+# en-tete (Libelle, ou un des noms "Anciens" des modeles precedents). Param = parametre de Set-SuiviQuotidienJour.
+$Script:CatalogueTracking = @(
+    [pscustomobject]@{ Cle = 'poids';               Libelle = 'POIDS';            Theme = '';          Largeur = 8;  Type = 'nombre'; Defaut = $true;  Param = 'Poids';              Anciens = @('Poids (kg)') }
+    [pscustomobject]@{ Cle = 'qualite_sommeil';     Libelle = 'QUALITE (1-5)';    Theme = 'SOMMEIL';   Largeur = 9;  Type = 'note';   Defaut = $true;  Param = 'QualiteSommeil';     Anciens = @('Qualite sommeil (1-5)') }
+    [pscustomobject]@{ Cle = 'sommeil_heures';      Libelle = 'DUREE (h)';        Theme = 'SOMMEIL';   Largeur = 8;  Type = 'nombre'; Defaut = $false; Param = 'SommeilHeures';      Anciens = @('Sommeil (h)') }
+    [pscustomobject]@{ Cle = 'heure_coucher';       Libelle = 'COUCHER';          Theme = 'SOMMEIL';   Largeur = 8;  Type = 'heure';  Defaut = $true;  Param = 'HeureCoucher';       Anciens = @('Heure coucher') }
+    [pscustomobject]@{ Cle = 'heure_lever';         Libelle = 'LEVER';            Theme = 'SOMMEIL';   Largeur = 8;  Type = 'heure';  Defaut = $true;  Param = 'HeureLever';         Anciens = @('Heure lever') }
+    [pscustomobject]@{ Cle = 'energie';             Libelle = 'ENERGIE (1-5)';    Theme = 'SOMMEIL';   Largeur = 9;  Type = 'note';   Defaut = $true;  Param = 'Energie';            Anciens = @('Energie (1-5)') }
+    [pscustomobject]@{ Cle = 'adhesion_nutrition';  Libelle = 'ADHESION (1-5)';   Theme = 'NUTRITION'; Largeur = 9;  Type = 'note';   Defaut = $true;  Param = 'AdhesionNutrition';  Anciens = @('Adhesion nutrition (1-5)') }
+    [pscustomobject]@{ Cle = 'jour_non_tracke';     Libelle = 'NON TRACKE';       Theme = 'NUTRITION'; Largeur = 8;  Type = 'ouinon'; Defaut = $true;  Param = 'JourNonTracke';      Anciens = @() }
+    [pscustomobject]@{ Cle = 'digestion';           Libelle = 'DIGESTION (1-5)';  Theme = 'NUTRITION'; Largeur = 9;  Type = 'note';   Defaut = $true;  Param = 'Digestion';          Anciens = @('Digestion (1-5)') }
+    [pscustomobject]@{ Cle = 'seance';              Libelle = 'SEANCE';           Theme = 'TRAINING';  Largeur = 10; Type = 'texte';  Defaut = $true;  Param = 'Seance';             Anciens = @() }
+    [pscustomobject]@{ Cle = 'nb_pas';              Libelle = 'NB PAS';           Theme = 'TRAINING';  Largeur = 8;  Type = 'nombre'; Defaut = $true;  Param = 'NbPas';              Anciens = @('Nb pas') }
+    [pscustomobject]@{ Cle = 'cardio_minutes';      Libelle = 'CARDIO (min)';     Theme = 'TRAINING';  Largeur = 8;  Type = 'nombre'; Defaut = $true;  Param = 'CardioMinutes';      Anciens = @('Cardio (min)', 'Cardio') }
+    [pscustomobject]@{ Cle = 'motivation';          Libelle = 'MOTIVATION (1-5)'; Theme = 'TRAINING';  Largeur = 10; Type = 'note';   Defaut = $true;  Param = 'Motivation';         Anciens = @('Motivation (1-5)') }
+    [pscustomobject]@{ Cle = 'fc_repos';            Libelle = 'RC REPOS';         Theme = 'SANTE';     Largeur = 8;  Type = 'nombre'; Defaut = $true;  Param = 'FcRepos';            Anciens = @('FC repos') }
+    [pscustomobject]@{ Cle = 'tension_systolique';  Libelle = 'PRESSION SYS';     Theme = 'SANTE';     Largeur = 9;  Type = 'nombre'; Defaut = $false; Param = 'TensionSystolique';  Anciens = @('Tension systolique') }
+    [pscustomobject]@{ Cle = 'tension_diastolique'; Libelle = 'PRESSION DIA';     Theme = 'SANTE';     Largeur = 9;  Type = 'nombre'; Defaut = $false; Param = 'TensionDiastolique'; Anciens = @('Tension diastolique') }
+    [pscustomobject]@{ Cle = 'bilan';               Libelle = 'NOTES DU JOUR';    Theme = 'NOTES';     Largeur = 30; Type = 'texte';  Defaut = $false; Param = 'Bilan';              Anciens = @('Bilan') }
+)
+# Lien du formulaire de bilan hebdo du fichier d'origine (modifiable dans l'application)
+$Script:LienBilanParDefaut = 'https://forms.gle/iBnR3Be1jyoXWvRh6'
+
+function Get-CatalogueTracking { return $Script:CatalogueTracking }
+
+function Get-ReglagesTracking {
+    <# Colonnes du TRACKING et case BILAN choisies par le coach (dernier choix memorise), ou les valeurs par defaut. #>
+    param([Parameter(Mandatory)] [string] $DbPath)
+    $defaut = ($Script:CatalogueTracking | Where-Object { $_.Defaut } | ForEach-Object { $_.Cle }) -join ','
+    $cles = @(([string](Get-Parametre -DbPath $DbPath -Cle 'tracking_colonnes' -Defaut $defaut)).Split(',') | Where-Object { $_ })
+    [pscustomobject]@{
+        Colonnes = $cles
+        AvecBilan = ((Get-Parametre -DbPath $DbPath -Cle 'tracking_avec_bilan' -Defaut '1') -eq '1')
+        LienBilan = [string](Get-Parametre -DbPath $DbPath -Cle 'tracking_lien_bilan' -Defaut $Script:LienBilanParDefaut)
+    }
+}
+
+function Set-ReglagesTracking {
+    param([Parameter(Mandatory)] [string] $DbPath, [string[]] $Colonnes, [bool] $AvecBilan, [string] $LienBilan)
+    Set-Parametre -DbPath $DbPath -Cle 'tracking_colonnes' -Valeur (@($Colonnes) -join ',')
+    Set-Parametre -DbPath $DbPath -Cle 'tracking_avec_bilan' -Valeur ([string][int]$AvecBilan)
+    Set-Parametre -DbPath $DbPath -Cle 'tracking_lien_bilan' -Valeur ([string]$LienBilan).Trim()
 }
 
 function Set-StyleExcel {
@@ -324,6 +363,45 @@ function Get-LignesSeriesExercice {
     }
 }
 
+function Get-FourchetteReps {
+    <#
+        Lit des repetitions prevues : "9-12" (ou "9 a 12", "9/12") -> Min 9, Max 12 ; "10" -> Min = Max = 10 ;
+        "12+" -> Min 12 sans Max. Retourne $null si rien d'exploitable ("max", "AMRAP", vide...).
+    #>
+    param([string] $Texte)
+    if ($Texte -match '^\s*(\d+)\s*(?:-|–|à|a|/)\s*(\d+)\s*$') {
+        $a = [int]$Matches[1]; $b = [int]$Matches[2]
+        return [pscustomobject]@{ Min = [math]::Min($a, $b); Max = [math]::Max($a, $b) }
+    }
+    if ($Texte -match '^\s*(\d+)\s*\+\s*$') { return [pscustomobject]@{ Min = [int]$Matches[1]; Max = $null } }
+    if ($Texte -match '^\s*(\d+)\s*$') { return [pscustomobject]@{ Min = [int]$Matches[1]; Max = [int]$Matches[1] } }
+    return $null
+}
+
+function Add-CouleursRepsExcel {
+    <#
+        Colore les cases REPS d'une serie (une par bloc SEMAINE) selon la fourchette prevue : rouge sous le
+        minimum, vert dans la fourchette, orange au-dessus du maximum. Une case vide reste sans couleur.
+    #>
+    param([Parameter(Mandatory)] $Ws, [int] $Ligne, [int[]] $Colonnes, $Fourchette)
+    if (-not $Fourchette -or $Colonnes.Count -eq 0) { return }
+    $adresse = ($Colonnes | ForEach-Object { $Ws.Cells[$Ligne, $_].Address }) -join ','
+    $ref = $Ws.Cells[$Ligne, $Colonnes[0]].Address   # reference relative : decalee automatiquement pour chaque bloc
+    $regles = @(@{ Formule = "AND(ISNUMBER($ref),$ref<$($Fourchette.Min))"; Couleur = '#F4CCCC' })
+    if ($null -ne $Fourchette.Max) {
+        $regles += @{ Formule = "AND(ISNUMBER($ref),$ref>=$($Fourchette.Min),$ref<=$($Fourchette.Max))"; Couleur = '#B6D7A8' }
+        $regles += @{ Formule = "AND(ISNUMBER($ref),$ref>$($Fourchette.Max))"; Couleur = '#F9CB9C' }
+    } else {
+        $regles += @{ Formule = "AND(ISNUMBER($ref),$ref>=$($Fourchette.Min))"; Couleur = '#B6D7A8' }
+    }
+    foreach ($r in $regles) {
+        $cf = $Ws.ConditionalFormatting.AddExpression((New-Object OfficeOpenXml.ExcelAddress($adresse)))
+        $cf.Formula = $r.Formule
+        $cf.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+        $cf.Style.Fill.BackgroundColor.Color = [System.Drawing.ColorTranslator]::FromHtml($r.Couleur)
+    }
+}
+
 function Get-LundiCetteSemaine {
     $aujourdhui = (Get-Date).Date
     return $aujourdhui.AddDays(-((([int]$aujourdhui.DayOfWeek) + 6) % 7))
@@ -331,69 +409,143 @@ function Get-LundiCetteSemaine {
 
 function Add-OngletTrackingExcel {
     <#
-        Ajoute l'onglet TRACKING (suivi quotidien) a un classeur : 52 semaines x 7 jours, une ligne par
-        jour, dates deja remplies a partir de -DateDebut. Colonne A masquee : "T|" sur la ligne
-        d'en-tetes, "J|" sur chaque ligne de jour, relus par Import-TrackingOngletCoach qui retrouve
-        chaque valeur par son en-tete (memes noms de colonnes que l'ancien modele de suivi).
+        Ajoute l'onglet TRACKING (suivi quotidien) sur le modele de l'onglet TRACKING d'origine du coach :
+        un bloc par semaine (52 par defaut) = ligne d'en-tetes, 7 jours (DATE + JOUR deja remplis, a partir
+        du lundi de la semaine de -DateDebut), ligne MOYENNE de la semaine. Les colonnes choisies sont
+        regroupees par theme (SOMMEIL, NUTRITION, TRAINING, SANTE) separes par une bande de couleur, avec
+        un fond alterne d'un theme a l'autre ; a droite, une case BILAN par semaine (fusionnee) avec le
+        lien du formulaire de bilan.
+
+        Colonne A masquee : "T|" sur chaque ligne d'en-tetes, "J|" sur chaque ligne de jour, relus par
+        Import-TrackingOngletCoach qui retrouve chaque valeur par son en-tete.
     #>
     param(
         [Parameter(Mandatory)] $Pkg,
         [Parameter(Mandatory)] [datetime] $DateDebut,
         [string] $Titre = 'SUIVI QUOTIDIEN',
+        [string[]] $Colonnes,
+        [bool] $AvecBilan = $true,
+        [string] $LienBilan = $Script:LienBilanParDefaut,
         [int] $NbSemaines = $Script:NbSemainesTracking
     )
+
+    if (-not $Colonnes) { $Colonnes = @($Script:CatalogueTracking | Where-Object { $_.Defaut } | ForEach-Object { $_.Cle }) }
+    $choisies = @($Script:CatalogueTracking | Where-Object { $Colonnes -contains $_.Cle })
+    $lundi = $DateDebut.Date.AddDays(-((([int]$DateDebut.DayOfWeek) + 6) % 7))
+    $culture = [System.Globalization.CultureInfo]::GetCultureInfo('fr-FR')
 
     $ws = Add-Worksheet -ExcelPackage $Pkg -WorksheetName 'TRACKING'
     $ws.View.ShowGridLines = $false
     $ws.Column(1).Hidden = $true
-    $cSemaine = 2; $cDate = 3; $cPremier = 4
-    $cFin = $cPremier + $Script:ColonnesTracking.Count - 1
-    $ws.Column($cSemaine).Width = 6; $ws.Column($cDate).Width = 15
-    $i = 0; foreach ($k in $Script:ColonnesTracking.Keys) { $ws.Column($cPremier + $i).Width = $Script:ColonnesTracking[$k]; $i++ }
+    $cSemaine = 2; $cDate = 3; $cJour = 4
+    $ws.Column($cSemaine).Width = 6; $ws.Column($cDate).Width = 11; $ws.Column($cJour).Width = 10
+
+    # Plan des colonnes : bande de theme (si le theme a au moins une colonne choisie) puis ses colonnes
+    $plan = New-Object System.Collections.Generic.List[object]
+    $c = $cJour + 1; $themePrecedent = $null; $numGroupe = -1
+    foreach ($col in $choisies) {
+        if ($col.Theme -ne $themePrecedent) {
+            $numGroupe++
+            if ($col.Theme) { $plan.Add([pscustomobject]@{ Col = $c; Bande = $col.Theme; Groupe = $numGroupe; Def = $null }); $ws.Column($c).Width = 4; $c++ }
+            $themePrecedent = $col.Theme
+        }
+        $plan.Add([pscustomobject]@{ Col = $c; Bande = $null; Groupe = $numGroupe; Def = $col }); $ws.Column($c).Width = $col.Largeur; $c++
+    }
+    $cDerniereDonnee = $c - 1
+    $cBilan = $null
+    if ($AvecBilan) { $ws.Column($c).Width = 2; $cBilan = $c + 1; $ws.Column($cBilan).Width = 13; $c = $cBilan + 1 }
+    $cFin = $c - 1
 
     Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 1 -C1 $cSemaine -L2 1 -C2 $cFin -Valeur $Titre) -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Taille 12 -Gras
     $ws.Row(1).Height = 24
-    $consigne = "Chaque jour : remplis la ligne du jour (les dates sont deja indiquees). Notes de 1 (mauvais) a 5 (excellent), heures au format 23:00. Laisse vide ce que tu n'as pas mesure."
+    $consigne = "Chaque jour : remplis ta ligne (les dates sont deja indiquees). Notes de 1 (mauvais) a 5 (excellent), heures au format 23:00. Laisse vide ce que tu n'as pas mesure."
+    if ($choisies | Where-Object { $_.Cle -eq 'jour_non_tracke' }) { $consigne += " NON TRACKE : mets X si tu n'as pas suivi ta nutrition ce jour-la." }
+    if ($AvecBilan) { $consigne += " En fin de semaine : clique sur BILAN pour remplir ton bilan." }
     Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 2 -C1 $cSemaine -L2 2 -C2 $cFin -Valeur $consigne) -Couleur $Script:CouleurViolet -Italique -Gauche
-    $ws.Row(2).Height = 26
+    $ws.Row(2).Height = 30
 
-    $lEntete = 4
-    $ws.Cells[$lEntete, 1].Value = 'T|'
-    $ws.Cells[$lEntete, $cSemaine].Value = 'SEM.'
-    $ws.Cells[$lEntete, $cDate].Value = 'Date'
-    $i = 0; foreach ($k in $Script:ColonnesTracking.Keys) { $ws.Cells[$lEntete, ($cPremier + $i)].Value = $k; $i++ }
-    Set-StyleExcel -Plage $ws.Cells[$lEntete, $cSemaine, $lEntete, $cFin] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras -Taille 8
-    $ws.Row($lEntete).Height = 30
-
-    $lDebut = $lEntete + 1
-    $lFin = $lDebut + $NbSemaines * 7 - 1
-    for ($n = 0; $n -lt $NbSemaines * 7; $n++) {
-        $ws.Cells[($lDebut + $n), 1].Value = 'J|'
-        $ws.Cells[($lDebut + $n), $cDate].Value = $DateDebut.AddDays($n)
-    }
-    $pDates = $ws.Cells[$lDebut, $cDate, $lFin, $cDate]
-    Set-StyleExcel -Plage $pDates -Couleur $Script:CouleurViolet -Gras -Gauche
-    $pDates.Style.Numberformat.Format = 'ddd dd/mm/yyyy'
-    $pSaisie = $ws.Cells[$lDebut, $cPremier, $lFin, $cFin]
-    Set-StyleExcel -Plage $pSaisie -Couleur '#000000' -Taille 10
-    Set-BordureExcel -Plage $pSaisie -Cotes @('Bottom', 'Right') -Couleur $Script:CouleurLigneSerie -Epaisseur 'Thin'
-    $ws.Cells[$lDebut, $cFin, $lFin, $cFin].Style.HorizontalAlignment = [OfficeOpenXml.Style.ExcelHorizontalAlignment]::Left
-    # Heures en texte : "23:00" saisi par le client reste "23:00" (et pas une fraction de jour)
-    $i = 0; foreach ($k in $Script:ColonnesTracking.Keys) {
-        if ($k -like 'Heure*') { $ws.Cells[$lDebut, ($cPremier + $i), $lFin, ($cPremier + $i)].Style.Numberformat.Format = '@' }
-        $i++
-    }
-    # Bande "S1..S52" par semaine, trait violet entre deux semaines
+    $hauteurBloc = 10   # en-tetes + 7 jours + MOYENNE + ligne vide
+    $premiereLigne = 4
     for ($s = 0; $s -lt $NbSemaines; $s++) {
-        $l1 = $lDebut + $s * 7; $l2 = $l1 + 6
-        Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $cSemaine -L2 $l2 -C2 $cSemaine -Valeur "S$($s + 1)") -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras -Taille 10
-        Set-BordureExcel -Plage $ws.Cells[$l2, $cSemaine, $l2, $cFin] -Cotes @('Bottom') -Couleur $Script:CouleurViolet
+        $lEntete = $premiereLigne + $s * $hauteurBloc
+        $lJ1 = $lEntete + 1; $lJ7 = $lEntete + 7; $lMoy = $lEntete + 8
+
+        # En-tetes
+        $ws.Cells[$lEntete, 1].Value = 'T|'
+        $ws.Cells[$lEntete, $cDate].Value = 'DATE'
+        $ws.Cells[$lEntete, $cJour].Value = 'JOUR'
+        foreach ($p in $plan) { if ($p.Def) { $ws.Cells[$lEntete, $p.Col].Value = $p.Def.Libelle } }
+        Set-StyleExcel -Plage $ws.Cells[$lEntete, $cDate, $lEntete, $cDerniereDonnee] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras -Taille 8
+        $ws.Row($lEntete).Height = 26
+
+        # Numero de semaine, sur toute la hauteur du bloc
+        Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lEntete -C1 $cSemaine -L2 $lMoy -C2 $cSemaine -Valeur ($s + 1)) -Couleur $Script:CouleurViolet -Gras -Taille 20
+
+        # Jours : DATE + JOUR deja remplis
+        for ($j = 0; $j -lt 7; $j++) {
+            $jour = $lundi.AddDays($s * 7 + $j)
+            $ws.Cells[($lJ1 + $j), 1].Value = 'J|'
+            $ws.Cells[($lJ1 + $j), $cDate].Value = $jour
+            $ws.Cells[($lJ1 + $j), $cJour].Value = $culture.DateTimeFormat.GetDayName($jour.DayOfWeek).ToUpperInvariant()
+        }
+        $pDates = $ws.Cells[$lJ1, $cDate, $lJ7, $cDate]
+        Set-StyleExcel -Plage $pDates -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras
+        $pDates.Style.Numberformat.Format = 'dd/mm/yyyy'
+        Set-StyleExcel -Plage $ws.Cells[$lJ1, $cJour, $lJ7, $cJour] -Fond '#B4A7D6' -Couleur '#FFFFFF' -Gras
+
+        # Zones a remplir : fond alterne d'un theme a l'autre, bande de theme fusionnee
+        foreach ($p in $plan) {
+            if ($p.Bande) {
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lEntete -C1 $p.Col -L2 $lMoy -C2 $p.Col -Valeur $p.Bande) -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras -Taille 9 -Rotation 90
+                continue
+            }
+            $zone = $ws.Cells[$lJ1, $p.Col, $lJ7, $p.Col]
+            if ($p.Groupe % 2 -eq 1) { Set-StyleExcel -Plage $zone -Fond '#F3F0FA' -Couleur '#000000' -Taille 10 } else { Set-StyleExcel -Plage $zone -Couleur '#000000' -Taille 10 }
+            if ($p.Def.Type -eq 'heure') { $zone.Style.Numberformat.Format = '@' }
+            if ($p.Def.Type -eq 'texte') { $zone.Style.HorizontalAlignment = [OfficeOpenXml.Style.ExcelHorizontalAlignment]::Left }
+            # MOYENNE de la semaine pour les valeurs chiffrees
+            if ($p.Def.Type -eq 'nombre' -or $p.Def.Type -eq 'note') {
+                $adresse = "$($ws.Cells[$lJ1, $p.Col].Address):$($ws.Cells[$lJ7, $p.Col].Address)"
+                $ws.Cells[$lMoy, $p.Col].Formula = "IFERROR(AVERAGE($adresse),`"`")"
+                $ws.Cells[$lMoy, $p.Col].Style.Numberformat.Format = if ($p.Def.Cle -eq 'nb_pas') { '0' } else { '0.0' }
+            }
+            Set-StyleExcel -Plage $ws.Cells[$lMoy, $p.Col] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras
+        }
+        Set-BordureExcel -Plage $ws.Cells[$lJ1, $cDate, $lJ7, $cDerniereDonnee] -Cotes @('Bottom', 'Right') -Couleur $Script:CouleurLigneSerie -Epaisseur 'Thin'
+        Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lMoy -C1 $cDate -L2 $lMoy -C2 $cJour -Valeur 'MOYENNE') -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras
+
+        # Case BILAN de la semaine (une seule, fusionnee), avec le lien du formulaire
+        if ($cBilan) {
+            $pBilan = Set-FusionExcel -Ws $ws -L1 $lEntete -C1 $cBilan -L2 $lMoy -C2 $cBilan -Valeur "BILAN`nSEMAINE $($s + 1)"
+            Set-StyleExcel -Plage $pBilan -Couleur $Script:CouleurViolet -Gras -Taille 12
+            Set-BordureExcel -Plage $pBilan -Cotes @('Top', 'Bottom', 'Left', 'Right') -Couleur $Script:CouleurViolet
+            if ($LienBilan) {
+                try {
+                    $ws.Cells[$lEntete, $cBilan].Hyperlink = New-Object System.Uri($LienBilan.Trim())
+                    $ws.Cells[$lEntete, $cBilan].Style.Font.UnderLine = $true
+                } catch { }
+            }
+        }
+    }
+    $lDerniere = $premiereLigne + $NbSemaines * $hauteurBloc - 2
+
+    # Notes de 1 a 5 : liste deroulante et couleur du rouge (1) au vert (5)
+    foreach ($p in $plan) {
+        if (-not $p.Def -or $p.Def.Type -ne 'note') { continue }
+        $plage = "$($ws.Cells[$premiereLigne, $p.Col].Address):$($ws.Cells[$lDerniere, $p.Col].Address)"
+        $v = $ws.DataValidations.AddListValidation($plage)
+        foreach ($n in 1..5) { $v.Formula.Values.Add([string]$n) }
+        $v.AllowBlank = $true; $v.ShowErrorMessage = $true; $v.ErrorTitle = 'Note de 1 a 5'; $v.Error = 'Mets une note de 1 (mauvais) a 5 (excellent).'
+        $cf = $ws.ConditionalFormatting.AddTwoColorScale($ws.Cells[$plage])
+        $cf.LowValue.Type = [OfficeOpenXml.ConditionalFormatting.eExcelConditionalFormattingValueObjectType]::Num; $cf.LowValue.Value = 1
+        $cf.LowValue.Color = [System.Drawing.ColorTranslator]::FromHtml('#F4CCCC')
+        $cf.HighValue.Type = [OfficeOpenXml.ConditionalFormatting.eExcelConditionalFormattingValueObjectType]::Num; $cf.HighValue.Value = 5
+        $cf.HighValue.Color = [System.Drawing.ColorTranslator]::FromHtml('#B6D7A8')
     }
 
-    $ws.View.FreezePanes(($lEntete + 1), $cPremier)
+    $ws.View.FreezePanes(3, ($cJour + 1))
     $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
     $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 0
-    $ws.PrinterSettings.RepeatRows = New-Object OfficeOpenXml.ExcelAddress('$4:$4')
     $ws.PrinterSettings.TopMargin = 0.4; $ws.PrinterSettings.BottomMargin = 0.4; $ws.PrinterSettings.LeftMargin = 0.3; $ws.PrinterSettings.RightMargin = 0.3
 }
 
@@ -430,7 +582,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
     $seances = @(Get-Seances -DbPath $DbPath -ProgrammeId $ProgrammeId)
 
     # Colonnes : A repere masque | B bande seance | C..L programme | M espace | puis 6 blocs de 4 colonnes + 1 espace
-    $colonnesProgramme = [ordered]@{ '#' = 4; 'EXERCICE' = 24; 'VARIANTE' = 11; 'SET' = 4.5; 'REPS' = 7; 'CHARGE' = 8; 'RECUP (s)' = 8; 'TEMPO' = 7; 'MUSCLE CIBLE' = 12; 'LIEN' = 7 }
+    $colonnesProgramme = [ordered]@{ '#' = 4; 'EXERCICE' = 24; 'VARIANTE' = 11; 'SET' = 4.5; 'REPS' = 7; 'CHARGE' = 10; 'RECUP (s)' = 8; 'TEMPO' = 7; 'MUSCLE CIBLE' = 12; 'LIEN' = 7 }
     $cB = 2; $cDebut = 3; $cFin = $cDebut + $colonnesProgramme.Count - 1   # C..L
     $cPremierBloc = $cFin + 2                                             # N
     $largeurBloc = 5                                                      # #, REPS, CHARGE, NOTES + espace
@@ -465,7 +617,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
             for ($b = 0; $b -lt $NbBlocs; $b++) {
                 $c0 = $cPremierBloc + $b * $largeurBloc
                 $ws.Column($c0).Width = 6.5;   # assez large pour "DATE" sur une ligne
-                $ws.Column($c0 + 1).Width = 7; $ws.Column($c0 + 2).Width = 8; $ws.Column($c0 + 3).Width = 16; $ws.Column($c0 + 4).Width = 2.5
+                $ws.Column($c0 + 1).Width = 7; $ws.Column($c0 + 2).Width = 10; $ws.Column($c0 + 3).Width = 16; $ws.Column($c0 + 4).Width = 2.5   # CHARGE assez large pour tenir sur une ligne
             }
 
             # Titre + consigne (repetes sur chaque onglet)
@@ -502,6 +654,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
                 foreach ($k in @('#', 'REPS', 'CHARGE', 'NOTES')) {
                     $ws.Cells[$lEntete, ($c0 + $j)].Value = $k
                     Set-StyleExcel -Plage $ws.Cells[$lEntete, ($c0 + $j)] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras
+                    $ws.Cells[$lEntete, ($c0 + $j)].Style.WrapText = $false
                     $j++
                 }
                 Set-BordureExcel -Plage $ws.Cells[$lEntete, $c0, $lEntete, ($c0 + 3)] -Cotes @('Bottom') -Couleur $Script:CouleurSeparateur
@@ -560,6 +713,13 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
                     Set-BordureExcel -Plage $ws.Cells[$l1, ($c0 + 3), $l2, ($c0 + 3)] -Cotes @('Right') -Couleur $Script:CouleurViolet
                     Set-BordureExcel -Plage $ws.Cells[$l2, $c0, $l2, ($c0 + 3)] -Cotes @('Bottom') -Couleur $Script:CouleurViolet
                 }
+                # REPS saisies colorees selon la fourchette prevue de la serie (rouge / vert / orange)
+                if ($NbBlocs -gt 0) {
+                    $colonnesReps = @(for ($b = 0; $b -lt $NbBlocs; $b++) { $cPremierBloc + $b * $largeurBloc + 1 })
+                    foreach ($sr in $series) {
+                        Add-CouleursRepsExcel -Ws $ws -Ligne ($l1 + $sr.Numero - 1) -Colonnes $colonnesReps -Fourchette (Get-FourchetteReps ([string]$sr.Repetitions))
+                    }
+                }
                 $ligne = $l2 + 1
             }
 
@@ -585,7 +745,9 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
         if ($NbBlocs -gt 0) {
             # Suivi quotidien dans le meme fichier, a partir du debut du programme (sinon du lundi de cette semaine)
             $debut = if ($prog.date_debut) { ([datetime]$prog.date_debut).Date } else { Get-LundiCetteSemaine }
-            Add-OngletTrackingExcel -Pkg $pkg -DateDebut $debut -Titre "SUIVI QUOTIDIEN - $($prog.client_prenom) $($prog.client_nom)".ToUpperInvariant()
+            $reglages = Get-ReglagesTracking -DbPath $DbPath
+            Add-OngletTrackingExcel -Pkg $pkg -DateDebut $debut -Titre "SUIVI QUOTIDIEN - $($prog.client_prenom) $($prog.client_nom)".ToUpperInvariant() `
+                -Colonnes $reglages.Colonnes -AvecBilan $reglages.AvecBilan -LienBilan $reglages.LienBilan
         }
 
         # Un classeur Excel doit contenir au moins un onglet
@@ -853,4 +1015,4 @@ FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
 
 Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, `
     Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries, `
-    Add-OngletTrackingExcel, Get-LundiCetteSemaine
+    Add-OngletTrackingExcel, Get-LundiCetteSemaine, Get-CatalogueTracking, Get-ReglagesTracking, Set-ReglagesTracking

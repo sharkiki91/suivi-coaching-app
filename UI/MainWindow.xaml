@@ -889,6 +889,8 @@
                                     <DataGridTextColumn Header="Adhésion" Binding="{Binding adhesion_nutrition}" Width="80" />
                                     <DataGridTextColumn Header="Nb pas" Binding="{Binding nb_pas}" Width="80" />
                                     <DataGridTextColumn Header="Motivation" Binding="{Binding motivation}" Width="85" />
+                                    <DataGridTextColumn Header="RC repos" Binding="{Binding fc_repos}" Width="70" />
+                                    <DataGridTextColumn Header="Séance" Binding="{Binding seance}" Width="90" />
                                     <DataGridTextColumn Header="Bilan" Binding="{Binding bilan}" Width="*" />
                                 </DataGrid.Columns>
                             </DataGrid>

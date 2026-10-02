@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.21.0'
+$AppVersion = '1.22.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -168,6 +168,49 @@ function Show-DialogNouvelElement {
 
     if ($dlg.ShowDialog()) { return $Script:ResultatDialog }
     return $null
+}
+
+function Show-DialogColonnesTracking {
+    <#
+        Choix des colonnes de l'onglet TRACKING (groupees par theme) et de la case BILAN avant un export.
+        Le choix est enregistre (Set-ReglagesTracking) et repris par defaut la fois suivante.
+        Retourne $true si le coach a valide, $false s'il a annule.
+    #>
+    $dlg = Import-XamlWindow -Path (Join-Path $AppRoot 'UI\DialogColonnesTracking.xaml')
+    $dlg.Owner = $Window
+    $panel = $dlg.FindName('PanelDialogColonnes')
+    $chkBilan = $dlg.FindName('ChkDialogBilan')
+    $txtLien = $dlg.FindName('TxtDialogLienBilan')
+    $reglages = Get-ReglagesTracking -DbPath $DbPath
+
+    $cases = New-Object System.Collections.Generic.List[object]
+    foreach ($groupe in @(Get-CatalogueTracking | Group-Object -Property Theme)) {
+        $titre = New-Object System.Windows.Controls.TextBlock
+        $titre.Text = if ($groupe.Name) { $groupe.Name } else { 'CORPS' }
+        $titre.FontWeight = 'Bold'; $titre.Foreground = '#674EA7'; $titre.Margin = '0,6,0,0'
+        [void]$panel.Children.Add($titre)
+        $ligne = New-Object System.Windows.Controls.WrapPanel
+        foreach ($def in $groupe.Group) {
+            $chk = New-Object System.Windows.Controls.CheckBox
+            $chk.Content = $def.Libelle; $chk.Tag = $def.Cle
+            $chk.IsChecked = ($reglages.Colonnes -contains $def.Cle)
+            [void]$ligne.Children.Add($chk); $cases.Add($chk)
+        }
+        [void]$panel.Children.Add($ligne)
+    }
+    $chkBilan.IsChecked = $reglages.AvecBilan
+    $txtLien.Text = $reglages.LienBilan
+
+    $dlg.FindName('BtnDialogAnnuler').Add_Click({ $dlg.DialogResult = $false })
+    $dlg.FindName('BtnDialogValider').Add_Click({
+        $cles = @($cases | Where-Object { $_.IsChecked } | ForEach-Object { [string]$_.Tag })
+        if ($cles.Count -eq 0) { Show-Erreur "Coche au moins une colonne."; return }
+        $lien = $txtLien.Text.Trim()
+        if ($lien -and -not ($lien -match '^https?://')) { Show-Erreur "Le lien du bilan doit commencer par http:// ou https://"; return }
+        Set-ReglagesTracking -DbPath $DbPath -Colonnes $cles -AvecBilan ([bool]$chkBilan.IsChecked) -LienBilan $lien
+        $dlg.DialogResult = $true
+    })
+    return [bool]$dlg.ShowDialog()
 }
 
 function Show-DialogChoixModele {
@@ -1278,6 +1321,7 @@ $GridSeanceExercices.Add_SelectionChanged({
 (Get-Ctrl 'BtnProgrammeExporterFeuilleSeance').Add_Click({
     Invoke-Protege {
         if (-not $CmbProgrammeSelection.SelectedItem) { Show-Erreur "Selectionne un programme."; return }
+        if (-not (Show-DialogColonnesTracking)) { return }
         $dialog = New-Object Microsoft.Win32.SaveFileDialog
         $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
         $dialog.FileName = "Feuille_de_seance.xlsx"
@@ -1803,11 +1847,12 @@ function Update-VueSuiviQuotidien {
 
 (Get-Ctrl 'BtnTelechargerModele').Add_Click({
     Invoke-Protege {
+        if (-not (Show-DialogColonnesTracking)) { return }
         $dialog = New-Object Microsoft.Win32.SaveFileDialog
         $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
         $dialog.FileName = 'Modele_Suivi_Quotidien.xlsx'
         if ($dialog.ShowDialog()) {
-            Export-ModeleTrackingExcel -Path $dialog.FileName
+            Export-ModeleTrackingExcel -Path $dialog.FileName -DbPath $DbPath
             Show-Info "Modèle créé. Envoie ce fichier à ton client pour qu'il le remplisse."
         }
     }

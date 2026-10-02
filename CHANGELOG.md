@@ -6,6 +6,22 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.22.0] - 2026-10-02
+
+### Ajouté
+- **Choix des colonnes du tracking avant l'export** : une fenêtre s'ouvre avant d'exporter la feuille de séance ou le modèle vierge de tracking. Elle permet de cocher les colonnes à inclure, regroupées par thème, d'activer ou non la case BILAN de la semaine et de saisir le lien du formulaire de bilan. Le choix est mémorisé. Par défaut, les pressions systolique/diastolique, la durée du sommeil et les notes du jour sont décochées.
+- **Feuille de séance : REPS colorées selon la fourchette prévue.** Chaque case REPS des blocs SEMAINE se colore d'elle-même quand le client saisit ses répétitions : **rouge** en dessous du minimum prévu pour la série, **vert** dans la fourchette, **orange** au-dessus du maximum (ex. pour « 9-12 » : 8 = rouge, 10 = vert, 13 = orange). Fourchettes reconnues : « 9-12 », « 9 à 12 », « 9/12 », une valeur unique (« 10 » = 10-10) et « 12+ » (pas de maximum). « max », « AMRAP » et les cases vides restent sans couleur. Fonctionne série par série, y compris avec le détail par série (pyramide).
+- Nouvelles colonnes de tracking reprises de l'onglet TRACKING d'origine : **RC REPOS** (fréquence cardiaque au repos), **SÉANCE** et **NON TRACKÉ**. Elles sont enregistrées en base (colonnes ajoutées automatiquement) et visibles dans le tableau du tracking quotidien (RC repos, séance).
+
+### Modifié
+- **Onglet TRACKING** au style de l'onglet TRACKING d'origine : un bloc par semaine (en-têtes répétés, DATE + JOUR déjà remplis du lundi au dimanche, ligne MOYENNE de la semaine), colonnes regroupées par thème (SOMMEIL, NUTRITION, TRAINING, SANTÉ) séparées par une bande de couleur, fond alterné d'un thème à l'autre pour alléger la lecture, notes de 1 à 5 en liste déroulante colorée du rouge au vert, et **une seule case BILAN par semaine** (fusionnée) contenant le lien vers le formulaire de bilan.
+- L'import retrouve chaque colonne par son en-tête, quelles que soient les colonnes exportées. Les fichiers des versions précédentes restent importables.
+
+### Corrigé
+- Tracking quotidien : une case laissée vide (poids, sommeil, notes…) était enregistrée comme **0**. Elle reste maintenant vide. Les lignes déjà importées ne sont pas modifiées.
+- Une heure de coucher ou de lever qu'Excel avait convertie en format heure est relue correctement (ex. "06:45").
+- Feuille de séance Excel : la colonne CHARGE (blocs SEMAINE et programme) est élargie et son en-tête ne passe plus à la ligne, comme pour la case DATE ("CHARGE" et une saisie comme "37.5 kg" tiennent sur une ligne).
+
 ## [1.21.0] - 2026-10-02
 
 ### Modifié

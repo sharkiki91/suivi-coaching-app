@@ -279,6 +279,8 @@ CREATE TABLE IF NOT EXISTS suivi_quotidien (
     motivation INTEGER,
     tension_systolique INTEGER,
     tension_diastolique INTEGER,
+    fc_repos INTEGER,
+    seance TEXT,
     bilan TEXT,
     UNIQUE(client_id, date)
 );
@@ -399,6 +401,27 @@ CREATE TABLE exercices_realises (
     if ($colonnesSeances -and -not ($colonnesSeances | Where-Object { $_.name -eq 'jour_semaine' })) {
         Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE seances ADD COLUMN jour_semaine TEXT"
     }
+
+    <# Migration : colonnes "RC repos" et "seance" du tracking quotidien (onglet TRACKING d'origine du coach). #>
+    $colonnesSuivi = @(Invoke-SqliteQuery -DataSource $DbPath -Query "PRAGMA table_info(suivi_quotidien)")
+    foreach ($col in @(@{ Nom = 'fc_repos'; Type = 'INTEGER' }, @{ Nom = 'seance'; Type = 'TEXT' })) {
+        if ($colonnesSuivi -and -not ($colonnesSuivi | Where-Object { $_.name -eq $col.Nom })) {
+            Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE suivi_quotidien ADD COLUMN $($col.Nom) $($col.Type)"
+        }
+    }
+}
+
+function Get-Parametre {
+    <# Lit un reglage de l'application (table parametres), ou $Defaut s'il n'a jamais ete enregistre. #>
+    param([Parameter(Mandatory)] [string] $DbPath, [Parameter(Mandatory)] [string] $Cle, $Defaut = $null)
+    $ligne = Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT valeur FROM parametres WHERE cle = @Cle" -SqlParameters @{ Cle = $Cle }
+    if ($null -eq $ligne) { return $Defaut }
+    return [string]$ligne.valeur
+}
+
+function Set-Parametre {
+    param([Parameter(Mandatory)] [string] $DbPath, [Parameter(Mandatory)] [string] $Cle, [string] $Valeur)
+    Invoke-SqliteQuery -DataSource $DbPath -Query "INSERT OR REPLACE INTO parametres (cle, valeur) VALUES (@Cle, @Valeur)" -SqlParameters @{ Cle = $Cle; Valeur = $Valeur }
 }
 
 function Backup-Database {
@@ -417,4 +440,4 @@ function Backup-Database {
     return $destination
 }
 
-Export-ModuleMember -Function Initialize-Database, Backup-Database
+Export-ModuleMember -Function Initialize-Database, Backup-Database, Get-Parametre, Set-Parametre
