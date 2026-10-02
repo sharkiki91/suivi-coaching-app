@@ -543,6 +543,7 @@
                                         <DataGridTextColumn Header="Charge" Binding="{Binding charge_affichage}" Width="90" />
                                         <DataGridTextColumn Header="Récup" Binding="{Binding recuperation_affichage}" Width="70" />
                                         <DataGridTextColumn Header="Tempo" Binding="{Binding tempo}" Width="80" />
+                                        <DataGridTextColumn Header="RIR" Binding="{Binding rir}" Width="50" />
                                         <DataGridTextColumn Header="Notes" Binding="{Binding notes}" Width="*" />
                                     </DataGrid.Columns>
                                 </DataGrid>
@@ -564,6 +565,7 @@
                                                 <ColumnDefinition Width="90" />
                                                 <ColumnDefinition Width="70" />
                                                 <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="60" />
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
@@ -575,7 +577,8 @@
                                             <TextBlock Grid.Row="0" Grid.Column="4" Text="Charge" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
                                             <TextBlock Grid.Row="0" Grid.Column="5" Text="Récup (s)" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
                                             <TextBlock Grid.Row="0" Grid.Column="6" Text="Tempo" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
-                                            <TextBlock Grid.Row="0" Grid.Column="7" Text="Notes" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                            <TextBlock Grid.Row="0" Grid.Column="7" Text="RIR" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" ToolTip="Reps In Reserve : répétitions en réserve avant l'échec" />
+                                            <TextBlock Grid.Row="0" Grid.Column="8" Text="Notes" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
                                             <ComboBox x:Name="CmbModeleExerciceAAjouter" Grid.Row="1" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
                                             <TextBox x:Name="TxtModExAVariante" Grid.Row="1" Grid.Column="1" Margin="0,0,6,0" />
                                             <TextBox x:Name="TxtModExASeries" Grid.Row="1" Grid.Column="2" Margin="0,0,6,0" />
@@ -583,9 +586,10 @@
                                             <TextBox x:Name="TxtModExACharge" Grid.Row="1" Grid.Column="4" Margin="0,0,6,0" />
                                             <TextBox x:Name="TxtModExARecup" Grid.Row="1" Grid.Column="5" Margin="0,0,6,0" />
                                             <TextBox x:Name="TxtModExATempo" Grid.Row="1" Grid.Column="6" Margin="0,0,6,0" />
-                                            <TextBox x:Name="TxtModExANotes" Grid.Row="1" Grid.Column="7" Margin="0,0,6,0" />
-                                            <Button x:Name="BtnModeleExerciceNouveau" Grid.Row="1" Grid.Column="8" Content="Nouveau" />
-                                            <Button x:Name="BtnModeleExerciceAjouter" Grid.Row="1" Grid.Column="9" Content="Enregistrer" Background="#27AE60" Foreground="White" />
+                                            <TextBox x:Name="TxtModExARir" Grid.Row="1" Grid.Column="7" Margin="0,0,6,0" ToolTip="RIR (Reps In Reserve) : répétitions gardées en réserve avant l'échec, ex. 2 ou 1-2" />
+                                            <TextBox x:Name="TxtModExANotes" Grid.Row="1" Grid.Column="8" Margin="0,0,6,0" />
+                                            <Button x:Name="BtnModeleExerciceNouveau" Grid.Row="1" Grid.Column="9" Content="Nouveau" />
+                                            <Button x:Name="BtnModeleExerciceAjouter" Grid.Row="1" Grid.Column="10" Content="Enregistrer" Background="#27AE60" Foreground="White" />
                                         </Grid>
                                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                             <Button x:Name="BtnModeleExerciceSupprimer" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" />
@@ -619,6 +623,9 @@
                     <Button x:Name="BtnProgrammeExporterPdf" Content="Exporter en PDF" Background="#27AE60" Foreground="White" Margin="20,0,8,0" />
                     <Button x:Name="BtnProgrammeExporterExcel" Content="Exporter en Excel" />
                     <Button x:Name="BtnProgrammeExporterFeuilleSeance" Content="Exporter la feuille de séance..." />
+                    <TextBlock Text="Colonnes :" VerticalAlignment="Center" FontWeight="SemiBold" Margin="12,0,6,0" ToolTip="Colonnes affichées dans les exports PDF, Excel et feuille de séance" />
+                    <CheckBox x:Name="ChkProgrammeTempo" Content="Tempo" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <CheckBox x:Name="ChkProgrammeRir" Content="RIR" VerticalAlignment="Center" ToolTip="Reps In Reserve : répétitions en réserve avant l'échec" />
                 </StackPanel>
 
                 <Grid Grid.Row="2">
@@ -671,6 +678,7 @@
                                 <DataGridTextColumn Header="Charge" Binding="{Binding charge_affichage}" Width="90" />
                                 <DataGridTextColumn Header="Récup" Binding="{Binding recuperation_affichage}" Width="70" />
                                 <DataGridTextColumn Header="Tempo" Binding="{Binding tempo}" Width="80" />
+                                <DataGridTextColumn Header="RIR" Binding="{Binding rir}" Width="50" />
                                 <DataGridTextColumn Header="Notes" Binding="{Binding notes}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
@@ -692,6 +700,7 @@
                                         <ColumnDefinition Width="90" />
                                         <ColumnDefinition Width="70" />
                                         <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="60" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
@@ -703,7 +712,8 @@
                                     <TextBlock Grid.Row="0" Grid.Column="4" Text="Charge" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
                                     <TextBlock Grid.Row="0" Grid.Column="5" Text="Récup (s)" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
                                     <TextBlock Grid.Row="0" Grid.Column="6" Text="Tempo" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
-                                    <TextBlock Grid.Row="0" Grid.Column="7" Text="Notes" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
+                                    <TextBlock Grid.Row="0" Grid.Column="7" Text="RIR" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" ToolTip="Reps In Reserve : répétitions en réserve avant l'échec" />
+                                    <TextBlock Grid.Row="0" Grid.Column="8" Text="Notes" FontWeight="SemiBold" FontSize="12" Margin="0,0,6,2" />
                                     <ComboBox x:Name="CmbExerciceAAjouter" Grid.Row="1" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
                                     <TextBox x:Name="TxtExAVariante" Grid.Row="1" Grid.Column="1" Margin="0,0,6,0" />
                                     <TextBox x:Name="TxtExASeries" Grid.Row="1" Grid.Column="2" Margin="0,0,6,0" />
@@ -711,9 +721,10 @@
                                     <TextBox x:Name="TxtExACharge" Grid.Row="1" Grid.Column="4" Margin="0,0,6,0" />
                                     <TextBox x:Name="TxtExARecup" Grid.Row="1" Grid.Column="5" Margin="0,0,6,0" />
                                     <TextBox x:Name="TxtExATempo" Grid.Row="1" Grid.Column="6" Margin="0,0,6,0" />
-                                    <TextBox x:Name="TxtExANotes" Grid.Row="1" Grid.Column="7" Margin="0,0,6,0" />
-                                    <Button x:Name="BtnExerciceSeanceNouveau" Grid.Row="1" Grid.Column="8" Content="Nouveau" />
-                                    <Button x:Name="BtnExerciceAjouter" Grid.Row="1" Grid.Column="9" Content="Enregistrer" Background="#27AE60" Foreground="White" />
+                                    <TextBox x:Name="TxtExARir" Grid.Row="1" Grid.Column="7" Margin="0,0,6,0" ToolTip="RIR (Reps In Reserve) : répétitions gardées en réserve avant l'échec, ex. 2 ou 1-2" />
+                                    <TextBox x:Name="TxtExANotes" Grid.Row="1" Grid.Column="8" Margin="0,0,6,0" />
+                                    <Button x:Name="BtnExerciceSeanceNouveau" Grid.Row="1" Grid.Column="9" Content="Nouveau" />
+                                    <Button x:Name="BtnExerciceAjouter" Grid.Row="1" Grid.Column="10" Content="Enregistrer" Background="#27AE60" Foreground="White" />
                                 </Grid>
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <Button x:Name="BtnExerciceSupprimerDeSeance" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" />

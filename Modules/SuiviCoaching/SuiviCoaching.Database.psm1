@@ -151,6 +151,7 @@ CREATE TABLE IF NOT EXISTS seance_exercices (
     recuperation_s TEXT,
     tempo TEXT,
     variante TEXT,
+    rir TEXT,
     notes TEXT
 );
 
@@ -202,6 +203,7 @@ CREATE TABLE IF NOT EXISTS seance_modele_exercices (
     recuperation_s TEXT,
     tempo TEXT,
     variante TEXT,
+    rir TEXT,
     notes TEXT
 );
 
@@ -391,8 +393,10 @@ CREATE TABLE exercices_realises (
     #>
     foreach ($table in @('seance_exercices', 'seance_modele_exercices')) {
         $colonnes = @(Invoke-SqliteQuery -DataSource $DbPath -Query "PRAGMA table_info($table)")
-        if ($colonnes -and -not ($colonnes | Where-Object { $_.name -eq 'variante' })) {
-            Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE $table ADD COLUMN variante TEXT"
+        foreach ($nouvelle in @('variante', 'rir')) {   # rir : repetitions en reserve (Reps In Reserve)
+            if ($colonnes -and -not ($colonnes | Where-Object { $_.name -eq $nouvelle })) {
+                Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE $table ADD COLUMN $nouvelle TEXT"
+            }
         }
     }
 

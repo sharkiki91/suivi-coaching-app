@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.22.0'
+$AppVersion = '1.23.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -1036,6 +1036,7 @@ $TxtModExARepetitions = Get-Ctrl 'TxtModExARepetitions'
 $TxtModExACharge = Get-Ctrl 'TxtModExACharge'
 $TxtModExARecup = Get-Ctrl 'TxtModExARecup'
 $TxtModExATempo = Get-Ctrl 'TxtModExATempo'
+$TxtModExARir = Get-Ctrl 'TxtModExARir'
 $TxtModExAVariante = Get-Ctrl 'TxtModExAVariante'
 $TxtModExANotes = Get-Ctrl 'TxtModExANotes'
 $ChkModExADetailSeries = Get-Ctrl 'ChkModExADetailSeries'
@@ -1058,7 +1059,7 @@ function Clear-FormModele {
 function Clear-FormModeleExercice {
     $Script:SelectedModeleExerciceId = $null
     $CmbModeleExerciceAAjouter.SelectedItem = $null
-    $TxtModExASeries.Text = ''; $TxtModExARepetitions.Text = ''; $TxtModExACharge.Text = ''; $TxtModExARecup.Text = ''; $TxtModExATempo.Text = ''; $TxtModExAVariante.Text = ''; $TxtModExANotes.Text = ''
+    $TxtModExASeries.Text = ''; $TxtModExARepetitions.Text = ''; $TxtModExACharge.Text = ''; $TxtModExARecup.Text = ''; $TxtModExATempo.Text = ''; $TxtModExARir.Text = ''; $TxtModExAVariante.Text = ''; $TxtModExANotes.Text = ''
     $ChkModExADetailSeries.IsChecked = $false
     $GridModeleExercices.SelectedItem = $null
 }
@@ -1094,6 +1095,7 @@ $GridModeleExercices.Add_SelectionChanged({
     $TxtModExACharge.Text = [string]$item.charge
     $TxtModExARecup.Text = [string]$item.recuperation_s
     $TxtModExATempo.Text = [string]$item.tempo
+    $TxtModExARir.Text = [string]$item.rir
     $TxtModExAVariante.Text = [string]$item.variante
     $TxtModExANotes.Text = [string]$item.notes
     $ChkModExADetailSeries.IsChecked = (@(Get-SeanceModeleExerciceSeries -DbPath $DbPath -SeanceModeleExerciceId $Script:SelectedModeleExerciceId).Count -gt 0)
@@ -1129,14 +1131,14 @@ $GridModeleExercices.Add_SelectionChanged({
         if ($Script:SelectedModeleExerciceId) {
             Update-SeanceModeleExercice -DbPath $DbPath -Id $Script:SelectedModeleExerciceId `
                 -Series (Get-TexteOuNull $TxtModExASeries.Text) -Repetitions (Get-TexteOuNull $TxtModExARepetitions.Text) -Charge (Get-TexteOuNull $TxtModExACharge.Text) `
-                -RecuperationS (Get-TexteOuNull $TxtModExARecup.Text) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Variante (Get-TexteOuNull $TxtModExAVariante.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text)
+                -RecuperationS (Get-TexteOuNull $TxtModExARecup.Text) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Rir (Get-TexteOuNull $TxtModExARir.Text) -Variante (Get-TexteOuNull $TxtModExAVariante.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text)
         } else {
             if (-not $CmbModeleExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
             $nomExercice = [string]$CmbModeleExerciceAAjouter.SelectedItem.affichage
             $series = $TxtModExASeries.Text; $reps = $TxtModExARepetitions.Text; $charge = $TxtModExACharge.Text; $recup = $TxtModExARecup.Text
             $nouvelId = New-SeanceModeleExercice -DbPath $DbPath -SeanceModeleId $ListeModeles.SelectedItem.id -ExerciceId $CmbModeleExerciceAAjouter.SelectedItem.id `
                 -Series (Get-TexteOuNull $series) -Repetitions (Get-TexteOuNull $reps) -Charge (Get-TexteOuNull $charge) `
-                -RecuperationS (Get-TexteOuNull $recup) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Variante (Get-TexteOuNull $TxtModExAVariante.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text)
+                -RecuperationS (Get-TexteOuNull $recup) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Rir (Get-TexteOuNull $TxtModExARir.Text) -Variante (Get-TexteOuNull $TxtModExAVariante.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text)
             Update-VueModeleExercices
             # Detail par serie par defaut (comme dans Programmes) : fenetre pre-remplie, Annuler = valeurs uniformes.
             Show-DialogSeriesExercice -Contexte 'Modele' -ExerciceLigneId ([int]$nouvelId) -NomExercice $nomExercice `
@@ -1186,6 +1188,7 @@ $TxtExARepetitions = Get-Ctrl 'TxtExARepetitions'
 $TxtExACharge = Get-Ctrl 'TxtExACharge'
 $TxtExARecup = Get-Ctrl 'TxtExARecup'
 $TxtExATempo = Get-Ctrl 'TxtExATempo'
+$TxtExARir = Get-Ctrl 'TxtExARir'
 $TxtExAVariante = Get-Ctrl 'TxtExAVariante'
 $TxtExANotes = Get-Ctrl 'TxtExANotes'
 $ChkExADetailSeries = Get-Ctrl 'ChkExADetailSeries'
@@ -1194,7 +1197,7 @@ $Script:SelectedSeanceExerciceId = $null
 function Clear-FormSeanceExercice {
     $Script:SelectedSeanceExerciceId = $null
     $CmbExerciceAAjouter.SelectedItem = $null
-    $TxtExASeries.Text = ''; $TxtExARepetitions.Text = ''; $TxtExACharge.Text = ''; $TxtExARecup.Text = ''; $TxtExATempo.Text = ''; $TxtExAVariante.Text = ''; $TxtExANotes.Text = ''
+    $TxtExASeries.Text = ''; $TxtExARepetitions.Text = ''; $TxtExACharge.Text = ''; $TxtExARecup.Text = ''; $TxtExATempo.Text = ''; $TxtExARir.Text = ''; $TxtExAVariante.Text = ''; $TxtExANotes.Text = ''
     $ChkExADetailSeries.IsChecked = $false
     $GridSeanceExercices.SelectedItem = $null
 }
@@ -1267,6 +1270,7 @@ $GridSeanceExercices.Add_SelectionChanged({
     $TxtExACharge.Text = [string]$item.charge
     $TxtExARecup.Text = [string]$item.recuperation_s
     $TxtExATempo.Text = [string]$item.tempo
+    $TxtExARir.Text = [string]$item.rir
     $TxtExAVariante.Text = [string]$item.variante
     $TxtExANotes.Text = [string]$item.notes
     $ChkExADetailSeries.IsChecked = (@(Get-SeanceExerciceSeries -DbPath $DbPath -SeanceExerciceId $Script:SelectedSeanceExerciceId).Count -gt 0)
@@ -1317,6 +1321,17 @@ $GridSeanceExercices.Add_SelectionChanged({
         }
     }
 })
+
+# Colonnes TEMPO / RIR des exports du programme (PDF, Excel, feuille de seance) : choix memorise des qu'on coche/decoche
+$ChkProgrammeTempo = Get-Ctrl 'ChkProgrammeTempo'
+$ChkProgrammeRir = Get-Ctrl 'ChkProgrammeRir'
+$reglagesProgramme = Get-ReglagesProgramme -DbPath $DbPath
+$ChkProgrammeTempo.IsChecked = $reglagesProgramme.AvecTempo
+$ChkProgrammeRir.IsChecked = $reglagesProgramme.AvecRir
+$enregistrerColonnesProgramme = {
+    Invoke-Protege { Set-ReglagesProgramme -DbPath $DbPath -AvecTempo ([bool]$ChkProgrammeTempo.IsChecked) -AvecRir ([bool]$ChkProgrammeRir.IsChecked) }
+}
+foreach ($chk in $ChkProgrammeTempo, $ChkProgrammeRir) { $chk.Add_Checked($enregistrerColonnesProgramme); $chk.Add_Unchecked($enregistrerColonnesProgramme) }
 
 (Get-Ctrl 'BtnProgrammeExporterFeuilleSeance').Add_Click({
     Invoke-Protege {
@@ -1399,14 +1414,14 @@ $GridSeanceExercices.Add_SelectionChanged({
         if ($Script:SelectedSeanceExerciceId) {
             Update-SeanceExercice -DbPath $DbPath -Id $Script:SelectedSeanceExerciceId `
                 -Series (Get-TexteOuNull $TxtExASeries.Text) -Repetitions (Get-TexteOuNull $TxtExARepetitions.Text) -Charge (Get-TexteOuNull $TxtExACharge.Text) `
-                -RecuperationS (Get-TexteOuNull $TxtExARecup.Text) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Variante (Get-TexteOuNull $TxtExAVariante.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text)
+                -RecuperationS (Get-TexteOuNull $TxtExARecup.Text) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Rir (Get-TexteOuNull $TxtExARir.Text) -Variante (Get-TexteOuNull $TxtExAVariante.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text)
         } else {
             if (-not $CmbExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
             $nomExercice = [string]$CmbExerciceAAjouter.SelectedItem.affichage
             $series = $TxtExASeries.Text; $reps = $TxtExARepetitions.Text; $charge = $TxtExACharge.Text; $recup = $TxtExARecup.Text
             $nouvelId = New-SeanceExercice -DbPath $DbPath -SeanceId $ListeSeances.SelectedItem.id -ExerciceId $CmbExerciceAAjouter.SelectedItem.id `
                 -Series (Get-TexteOuNull $series) -Repetitions (Get-TexteOuNull $reps) -Charge (Get-TexteOuNull $charge) `
-                -RecuperationS (Get-TexteOuNull $recup) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Variante (Get-TexteOuNull $TxtExAVariante.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text)
+                -RecuperationS (Get-TexteOuNull $recup) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Rir (Get-TexteOuNull $TxtExARir.Text) -Variante (Get-TexteOuNull $TxtExAVariante.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text)
             Update-VueSeanceExercices
             # Detail par serie par defaut : la fenetre s'ouvre pre-remplie (une ligne par serie). Annuler = valeurs uniformes.
             Show-DialogSeriesExercice -Contexte 'Programme' -ExerciceLigneId ([int]$nouvelId) -NomExercice $nomExercice `

@@ -115,6 +115,7 @@ WHERE p.id = @Id
 "@ -SqlParameters @{ Id = $ProgrammeId })
 
     $seances = @(Get-Seances -DbPath $DbPath -ProgrammeId $ProgrammeId)
+    $reglagesProgramme = Get-ReglagesProgramme -DbPath $DbPath   # colonnes TEMPO / RIR cochees ou non
     $dossierData = Split-Path -Path $DbPath -Parent
     $v = $Script:CouleurViolet; $lav = $Script:CouleurLavande; $sep = $Script:CouleurSeparateur
 
@@ -183,10 +184,15 @@ WHERE p.id = @Id
         $avecImage = @($exercices | Where-Object { $_.image_path }).Count -gt 0
         $jourHtml = if ($s.jour_semaine) { "<br><span class='jour'>$(HtmlEncode ([string]$s.jour_semaine).ToUpperInvariant())</span>" } else { '' }
         [void]$sb.Append("<div class='bloc'><div class='bande'><div>$(HtmlEncode ([string]$s.nom).ToUpperInvariant())$jourHtml</div></div>")
-        [void]$sb.Append("<table class='seance'><colgroup><col style='width:28px'><col style='width:24%'><col style='width:9%'><col style='width:36px'><col style='width:8%'><col style='width:9%'><col style='width:8%'><col style='width:7%'><col style='width:13%'><col style='width:9%'></colgroup><thead><tr>")
-        [void]$sb.Append("<th>#</th><th>Exercice</th><th>Variante</th><th>Set</th><th>Reps</th><th>Charge</th><th>R&eacute;cup (s)</th><th>Tempo</th><th>Muscle cible</th><th>Lien</th></tr></thead>")
+        $colTempo = if ($reglagesProgramme.AvecTempo) { "<col style='width:7%'>" } else { '' }
+        $colRir = if ($reglagesProgramme.AvecRir) { "<col style='width:5%'>" } else { '' }
+        [void]$sb.Append("<table class='seance'><colgroup><col style='width:28px'><col style='width:24%'><col style='width:9%'><col style='width:36px'><col style='width:8%'><col style='width:9%'><col style='width:8%'>$colTempo$colRir<col style='width:13%'><col style='width:9%'></colgroup><thead><tr>")
+        $thTempo = if ($reglagesProgramme.AvecTempo) { '<th>Tempo</th>' } else { '' }
+        $thRir = if ($reglagesProgramme.AvecRir) { '<th>RIR</th>' } else { '' }
+        [void]$sb.Append("<th>#</th><th>Exercice</th><th>Variante</th><th>Set</th><th>Reps</th><th>Charge</th><th>R&eacute;cup (s)</th>$thTempo$thRir<th>Muscle cible</th><th>Lien</th></tr></thead>")
         if ($exercices.Count -eq 0) {
-            [void]$sb.Append("<tbody><tr><td colspan='10' class='vide'>Aucun exercice dans cette s&eacute;ance.</td></tr></tbody></table></div>")
+            $nbColonnes = 9 + [int]$reglagesProgramme.AvecTempo + [int]$reglagesProgramme.AvecRir
+            [void]$sb.Append("<tbody><tr><td colspan='$nbColonnes' class='vide'>Aucun exercice dans cette s&eacute;ance.</td></tr></tbody></table></div>")
             continue
         }
         $numero = 0
@@ -218,7 +224,8 @@ WHERE p.id = @Id
                 if (-not $recupUnique) { [void]$sb.Append("<td class='serie'>$(HtmlEncode $sr.Recup)</td>") }
                 elseif ($sr.Numero -eq 1) { [void]$sb.Append("<td rowspan='$n'>$(HtmlEncode $recups[0])</td>") }
                 if ($sr.Numero -eq 1) {
-                    [void]$sb.Append("<td rowspan='$n'>$(HtmlEncode $e.tempo)</td>")
+                    if ($reglagesProgramme.AvecTempo) { [void]$sb.Append("<td rowspan='$n'>$(HtmlEncode $e.tempo)</td>") }
+                    if ($reglagesProgramme.AvecRir) { [void]$sb.Append("<td rowspan='$n'>$(HtmlEncode $e.rir)</td>") }
                     [void]$sb.Append("<td class='violet' rowspan='$n'>$(HtmlEncode $e.muscle_cible)</td>")
                     [void]$sb.Append("<td rowspan='$n'>$lienHtml</td>")
                 }
@@ -301,6 +308,21 @@ function Get-ReglagesTracking {
     }
 }
 
+function Get-ReglagesProgramme {
+    <# Colonnes optionnelles des exports du programme (PDF, Excel, feuille de seance) : TEMPO et RIR, cochees par defaut. #>
+    param([Parameter(Mandatory)] [string] $DbPath)
+    [pscustomobject]@{
+        AvecTempo = ((Get-Parametre -DbPath $DbPath -Cle 'programme_avec_tempo' -Defaut '1') -eq '1')
+        AvecRir = ((Get-Parametre -DbPath $DbPath -Cle 'programme_avec_rir' -Defaut '1') -eq '1')
+    }
+}
+
+function Set-ReglagesProgramme {
+    param([Parameter(Mandatory)] [string] $DbPath, [bool] $AvecTempo, [bool] $AvecRir)
+    Set-Parametre -DbPath $DbPath -Cle 'programme_avec_tempo' -Valeur ([string][int]$AvecTempo)
+    Set-Parametre -DbPath $DbPath -Cle 'programme_avec_rir' -Valeur ([string][int]$AvecRir)
+}
+
 function Set-ReglagesTracking {
     param([Parameter(Mandatory)] [string] $DbPath, [string[]] $Colonnes, [bool] $AvecBilan, [string] $LienBilan)
     Set-Parametre -DbPath $DbPath -Cle 'tracking_colonnes' -Valeur (@($Colonnes) -join ',')
@@ -344,6 +366,60 @@ function Set-FusionExcel {
     if ($L2 -gt $L1 -or $C2 -gt $C1) { $plage.Merge = $true }
     if ($null -ne $Valeur -and "$Valeur" -ne '') { $Ws.Cells[$L1, $C1].Value = $Valeur }
     return ,$plage   # virgule : sinon PowerShell deroule la plage cellule par cellule
+}
+
+function Set-LargeursSansRetourExcel {
+    <#
+        Elargit chaque colonne pour que le texte de ses cellules tienne sur une seule ligne, mesure dans la
+        police reelle de la cellule (nom, taille, gras). Un retour a la ligne voulu ("`n") est respecte :
+        c'est la ligne la plus longue qui compte. Sont ignores : les cellules fusionnees sur plusieurs
+        colonnes (titres, consignes), les textes verticaux et les colonnes masquees. Ne retrecit jamais une
+        colonne ; plafonne a -LargeurMax.
+    #>
+    param([Parameter(Mandatory)] $Ws, [double] $LargeurMax = 60)
+    if (-not $Ws.Dimension) { return }
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+
+    $surPlusieursColonnes = @{}
+    foreach ($m in $Ws.MergedCells) {
+        $a = New-Object OfficeOpenXml.ExcelAddress($m)
+        if ($a.End.Column -le $a.Start.Column) { continue }
+        for ($r = $a.Start.Row; $r -le $a.End.Row; $r++) { for ($c = $a.Start.Column; $c -le $a.End.Column; $c++) { $surPlusieursColonnes["$r,$c"] = $true } }
+    }
+    # Unite de largeur Excel = largeur du chiffre "0" de la police par defaut (Calibri 11) = 7 px a 96 ppp ;
+    # on ajoute la marge interieure de la cellule (~8 px) et 8 % de securite (rendu Google Sheets un peu plus large).
+    $echelle = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero).DpiX / 96.0
+    $largeurZero = 7 * $echelle; $marge = 8 * $echelle
+    $sansMarge = [System.Windows.Forms.TextFormatFlags]::NoPadding
+    $polices = @{}; $mesures = @{}; $besoin = @{}
+    foreach ($cell in $Ws.Cells[$Ws.Dimension.Address]) {
+        if ($null -eq $cell.Value) { continue }
+        $r = $cell.Start.Row; $c = $cell.Start.Column
+        if ($surPlusieursColonnes.ContainsKey("$r,$c") -or $Ws.Column($c).Hidden) { continue }
+        $st = $cell.Style
+        if ($st.TextRotation -ne 0) { continue }
+        $texte = [string]$cell.Text
+        if (-not $texte) { continue }
+        $cle = "$($st.Font.Name)|$($st.Font.Size)|$($st.Font.Bold)"
+        if (-not $polices.ContainsKey($cle)) {
+            $nom = if ($st.Font.Name) { $st.Font.Name } else { 'Calibri' }
+            $taille = if ($st.Font.Size -gt 0) { [single]$st.Font.Size } else { [single]11 }
+            $style = if ($st.Font.Bold) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }
+            $polices[$cle] = New-Object System.Drawing.Font($nom, $taille, $style)
+        }
+        foreach ($morceau in $texte.Split("`n")) {
+            $cleMesure = "$cle|$morceau"
+            if (-not $mesures.ContainsKey($cleMesure)) {
+                $px = [System.Windows.Forms.TextRenderer]::MeasureText($morceau, $polices[$cle], [System.Drawing.Size]::Empty, $sansMarge).Width
+                $mesures[$cleMesure] = [math]::Min($LargeurMax, (($px + $marge) / $largeurZero) * 1.08)
+            }
+            if (-not $besoin.ContainsKey($c) -or $besoin[$c] -lt $mesures[$cleMesure]) { $besoin[$c] = $mesures[$cleMesure] }
+        }
+    }
+    foreach ($c in $besoin.Keys) {
+        if ($Ws.Column($c).Width -lt $besoin[$c]) { $Ws.Column($c).Width = [math]::Round($besoin[$c], 1) }
+    }
+    foreach ($f in $polices.Values) { $f.Dispose() }
 }
 
 function Get-LignesSeriesExercice {
@@ -543,6 +619,7 @@ function Add-OngletTrackingExcel {
         $cf.HighValue.Color = [System.Drawing.ColorTranslator]::FromHtml('#B6D7A8')
     }
 
+    Set-LargeursSansRetourExcel -Ws $ws   # aucune cellule ne passe a la ligne
     $ws.View.FreezePanes(3, ($cJour + 1))
     $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
     $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 0
@@ -553,7 +630,8 @@ function Export-FeuilleSeanceExcel {
     <#
         Genere la feuille de suivi des performances a remplir par le client, sur le modele de
         l'onglet TRAINING du fichier d'origine du coach : pour chaque seance, le programme a gauche
-        (une ligne par serie : #, exercice, variante, set, reps, charge, recup, tempo, muscle, lien)
+        (une ligne par serie : #, exercice, variante, set, reps, charge, recup, tempo, rir, muscle, lien ;
+        TEMPO et RIR seulement si le coach les a coches, cf. Get-ReglagesProgramme)
         et, a droite, 12 blocs "SEMAINE 1..12" cote a cote (DATE, puis REPS / CHARGE par serie et NOTES
         par exercice) pour noter 12 seances successives. La partie programme reste figee a l'ecran.
         Un onglet par seance (nomme comme la seance), imprime sur une hauteur de page paysage
@@ -581,10 +659,14 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
 "@ -SqlParameters @{ Id = $ProgrammeId }
     $seances = @(Get-Seances -DbPath $DbPath -ProgrammeId $ProgrammeId)
 
-    # Colonnes : A repere masque | B bande seance | C..L programme | M espace | puis 6 blocs de 4 colonnes + 1 espace
-    $colonnesProgramme = [ordered]@{ '#' = 4; 'EXERCICE' = 24; 'VARIANTE' = 11; 'SET' = 4.5; 'REPS' = 7; 'CHARGE' = 10; 'RECUP (s)' = 8; 'TEMPO' = 7; 'MUSCLE CIBLE' = 12; 'LIEN' = 7 }
-    $cB = 2; $cDebut = 3; $cFin = $cDebut + $colonnesProgramme.Count - 1   # C..L
-    $cPremierBloc = $cFin + 2                                             # N
+    # Colonnes : A repere masque | B bande seance | programme (TEMPO et RIR selon le choix du coach) | espace | puis les blocs SEMAINE (4 colonnes + 1 espace)
+    $reglagesProgramme = Get-ReglagesProgramme -DbPath $DbPath
+    $colonnesProgramme = [ordered]@{ '#' = 4; 'EXERCICE' = 24; 'VARIANTE' = 11; 'SET' = 4.5; 'REPS' = 7; 'CHARGE' = 10; 'RECUP (s)' = 8; 'TEMPO' = 7; 'RIR' = 5; 'MUSCLE CIBLE' = 12; 'LIEN' = 7 }
+    if (-not $reglagesProgramme.AvecTempo) { $colonnesProgramme.Remove('TEMPO') }
+    if (-not $reglagesProgramme.AvecRir) { $colonnesProgramme.Remove('RIR') }
+    $cB = 2; $cDebut = 3; $cFin = $cDebut + $colonnesProgramme.Count - 1
+    $ci = @{}; $i = 0; foreach ($k in $colonnesProgramme.Keys) { $ci[$k] = $cDebut + $i; $i++ }   # nom de colonne -> numero
+    $cPremierBloc = $cFin + 2
     $largeurBloc = 5                                                      # #, REPS, CHARGE, NOTES + espace
 
     if (Test-Path $Path) { Remove-Item $Path -Force }
@@ -672,32 +754,33 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
                     $l = $l1 + $sr.Numero - 1
                     $ws.Row($l).Height = 16
                     $ws.Cells[$l, 1].Value = "S|$($s.id)|$($e.id)|$($sr.Numero)"
-                    $ws.Cells[$l, ($cDebut + 3)].Value = $sr.Numero
-                    $ws.Cells[$l, ($cDebut + 4)].Value = [string]$sr.Repetitions
-                    $ws.Cells[$l, ($cDebut + 5)].Value = [string]$sr.Charge
-                    Set-StyleExcel -Plage $ws.Cells[$l, ($cDebut + 3), $l, ($cDebut + 5)] -Couleur '#000000' -Gras
+                    $ws.Cells[$l, $ci['SET']].Value = $sr.Numero
+                    $ws.Cells[$l, $ci['REPS']].Value = [string]$sr.Repetitions
+                    $ws.Cells[$l, $ci['CHARGE']].Value = [string]$sr.Charge
+                    Set-StyleExcel -Plage $ws.Cells[$l, $ci['SET'], $l, $ci['CHARGE']] -Couleur '#000000' -Gras
                 }
                 $nom = ([string]$e.exercice_nom).ToUpperInvariant()
                 if ($e.notes) { $nom += "`n($($e.notes))" }
                 Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $cDebut -L2 $l2 -C2 $cDebut -Valeur $numeroExercice) -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras
-                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 ($cDebut + 1) -L2 $l2 -C2 ($cDebut + 1) -Valeur $nom) -Couleur $Script:CouleurViolet -Gras
-                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 ($cDebut + 2) -L2 $l2 -C2 ($cDebut + 2) -Valeur ([string]$e.variante).ToUpperInvariant()) -Couleur $Script:CouleurViolet -Gras
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $ci['EXERCICE'] -L2 $l2 -C2 $ci['EXERCICE'] -Valeur $nom) -Couleur $Script:CouleurViolet -Gras
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $ci['VARIANTE'] -L2 $l2 -C2 $ci['VARIANTE'] -Valeur ([string]$e.variante).ToUpperInvariant()) -Couleur $Script:CouleurViolet -Gras
                 # Recup : une seule cellule si identique pour toutes les series (comme l'original), sinon serie par serie
                 $recups = @($series | ForEach-Object { [string]$_.Recup } | Select-Object -Unique)
                 if ($recups.Count -le 1) {
-                    Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 ($cDebut + 6) -L2 $l2 -C2 ($cDebut + 6) -Valeur ([string]$recups[0])) -Couleur '#000000' -Gras
+                    Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $ci['RECUP (s)'] -L2 $l2 -C2 $ci['RECUP (s)'] -Valeur ([string]$recups[0])) -Couleur '#000000' -Gras
                 } else {
-                    foreach ($sr in $series) { $ws.Cells[($l1 + $sr.Numero - 1), ($cDebut + 6)].Value = [string]$sr.Recup }
-                    Set-StyleExcel -Plage $ws.Cells[$l1, ($cDebut + 6), $l2, ($cDebut + 6)] -Couleur '#000000' -Gras
+                    foreach ($sr in $series) { $ws.Cells[($l1 + $sr.Numero - 1), $ci['RECUP (s)']].Value = [string]$sr.Recup }
+                    Set-StyleExcel -Plage $ws.Cells[$l1, $ci['RECUP (s)'], $l2, $ci['RECUP (s)']] -Couleur '#000000' -Gras
                 }
-                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 ($cDebut + 7) -L2 $l2 -C2 ($cDebut + 7) -Valeur ([string]$e.tempo)) -Couleur '#000000' -Gras
-                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 ($cDebut + 8) -L2 $l2 -C2 ($cDebut + 8) -Valeur ([string]$e.muscle_cible).ToUpperInvariant()) -Couleur $Script:CouleurViolet -Gras
-                $pLien = Set-FusionExcel -Ws $ws -L1 $l1 -C1 ($cDebut + 9) -L2 $l2 -C2 ($cDebut + 9) -Valeur $null
+                if ($ci.ContainsKey('TEMPO')) { Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $ci['TEMPO'] -L2 $l2 -C2 $ci['TEMPO'] -Valeur ([string]$e.tempo)) -Couleur '#000000' -Gras }
+                if ($ci.ContainsKey('RIR')) { Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $ci['RIR'] -L2 $l2 -C2 $ci['RIR'] -Valeur ([string]$e.rir)) -Couleur '#000000' -Gras }
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $ci['MUSCLE CIBLE'] -L2 $l2 -C2 $ci['MUSCLE CIBLE'] -Valeur ([string]$e.muscle_cible).ToUpperInvariant()) -Couleur $Script:CouleurViolet -Gras
+                $pLien = Set-FusionExcel -Ws $ws -L1 $l1 -C1 $ci['LIEN'] -L2 $l2 -C2 $ci['LIEN'] -Valeur $null
                 Set-StyleExcel -Plage $pLien -Couleur $Script:CouleurViolet -Gras
                 if ($e.lien_video) {
-                    try { $ws.Cells[$l1, ($cDebut + 9)].Hyperlink = New-Object System.Uri([string]$e.lien_video) } catch { }
-                    $ws.Cells[$l1, ($cDebut + 9)].Value = 'VIDEO'
-                    $ws.Cells[$l1, ($cDebut + 9)].Style.Font.UnderLine = $true
+                    try { $ws.Cells[$l1, $ci['LIEN']].Hyperlink = New-Object System.Uri([string]$e.lien_video) } catch { }
+                    $ws.Cells[$l1, $ci['LIEN']].Value = 'VIDEO'
+                    $ws.Cells[$l1, $ci['LIEN']].Style.Font.UnderLine = $true
                 }
                 Set-BordureExcel -Plage $ws.Cells[$l1, $cDebut, $l2, $cFin] -Cotes @('Right') -Couleur $Script:CouleurSeparateur -Epaisseur 'Thin'
                 Set-BordureExcel -Plage $ws.Cells[$l2, $cDebut, $l2, $cFin] -Cotes @('Bottom')
@@ -729,6 +812,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
             Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lTitre -C1 $cB -L2 ($ligne - 1) -C2 $cB -Valeur $nomSeance) -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras -Taille 14 -Rotation 90
             Set-BordureExcel -Plage $ws.Cells[$lTitre, $cB, ($ligne - 1), $cB] -Cotes @('Right') -Couleur $Script:CouleurViolet
 
+            Set-LargeursSansRetourExcel -Ws $ws   # aucune cellule ne passe a la ligne
             # La partie programme reste visible quand on fait defiler les blocs SEANCE vers la droite
             if ($NbBlocs -gt 0) { $ws.View.FreezePanes(1, ($cFin + 2)) }
             # Impression : toute la seance sur une hauteur de page paysage ; au-dela de 6 semaines, le programme
@@ -737,7 +821,10 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
             $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
             $nbPagesLargeur = [math]::Max(1, [math]::Ceiling($NbBlocs / $Script:NbBlocsParPage))
             $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = $nbPagesLargeur; $ws.PrinterSettings.FitToHeight = 1
-            if ($nbPagesLargeur -gt 1) { $ws.PrinterSettings.RepeatColumns = New-Object OfficeOpenXml.ExcelAddress('$B:$M') }
+            if ($nbPagesLargeur -gt 1) {
+                $lettreFin = $ws.Cells[1, ($cFin + 1)].Address -replace '\d', ''   # programme + colonne d'espace
+                $ws.PrinterSettings.RepeatColumns = New-Object OfficeOpenXml.ExcelAddress("`$B:`$$lettreFin")
+            }
             $ws.PrinterSettings.HorizontalCentered = $true
             $ws.PrinterSettings.TopMargin = 0.4; $ws.PrinterSettings.BottomMargin = 0.4; $ws.PrinterSettings.LeftMargin = 0.3; $ws.PrinterSettings.RightMargin = 0.3
         }
@@ -1006,6 +1093,7 @@ FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
 
             $ligne = [math]::Max($ligne, $lr) + 2
         }
+        Set-LargeursSansRetourExcel -Ws $ws   # aucune cellule ne passe a la ligne
         $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
         $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 0
     } finally {
@@ -1015,4 +1103,5 @@ FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
 
 Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, `
     Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries, `
-    Add-OngletTrackingExcel, Get-LundiCetteSemaine, Get-CatalogueTracking, Get-ReglagesTracking, Set-ReglagesTracking
+    Add-OngletTrackingExcel, Get-LundiCetteSemaine, Get-CatalogueTracking, Get-ReglagesTracking, Set-ReglagesTracking, `
+    Get-ReglagesProgramme, Set-ReglagesProgramme

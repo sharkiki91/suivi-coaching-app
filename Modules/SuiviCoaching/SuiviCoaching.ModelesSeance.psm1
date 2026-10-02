@@ -73,18 +73,19 @@ function New-SeanceModeleExercice {
         [string] $Charge,
         [string] $RecuperationS,
         [string] $Tempo,
+        [string] $Rir,
         [string] $Variante,
         [string] $Notes
     )
     $ordreMax = (Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT COALESCE(MAX(ordre), -1) AS m FROM seance_modele_exercices WHERE seance_modele_id = @SeanceModeleId" -SqlParameters @{ SeanceModeleId = $SeanceModeleId }).m
     $query = @"
-INSERT INTO seance_modele_exercices (seance_modele_id, exercice_id, ordre, series, repetitions, charge, recuperation_s, tempo, variante, notes)
-VALUES (@SeanceModeleId, @ExerciceId, @Ordre, @Series, @Repetitions, @Charge, @RecuperationS, @Tempo, @Variante, @Notes);
+INSERT INTO seance_modele_exercices (seance_modele_id, exercice_id, ordre, series, repetitions, charge, recuperation_s, tempo, rir, variante, notes)
+VALUES (@SeanceModeleId, @ExerciceId, @Ordre, @Series, @Repetitions, @Charge, @RecuperationS, @Tempo, @Rir, @Variante, @Notes);
 SELECT last_insert_rowid() AS id;
 "@
     (Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{
         SeanceModeleId = $SeanceModeleId; ExerciceId = $ExerciceId; Ordre = ($ordreMax + 1)
-        Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Variante = $Variante; Notes = $Notes
+        Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Rir = $Rir; Variante = $Variante; Notes = $Notes
     }).id
 }
 
@@ -97,13 +98,14 @@ function Update-SeanceModeleExercice {
         [string] $Charge,
         [string] $RecuperationS,
         [string] $Tempo,
+        [string] $Rir,
         [string] $Variante,
         [string] $Notes
     )
     Invoke-SqliteQuery -DataSource $DbPath -Query @"
-UPDATE seance_modele_exercices SET series = @Series, repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS, tempo = @Tempo, variante = @Variante, notes = @Notes
+UPDATE seance_modele_exercices SET series = @Series, repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS, tempo = @Tempo, rir = @Rir, variante = @Variante, notes = @Notes
 WHERE id = @Id
-"@ -SqlParameters @{ Id = $Id; Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Variante = $Variante; Notes = $Notes }
+"@ -SqlParameters @{ Id = $Id; Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Rir = $Rir; Variante = $Variante; Notes = $Notes }
 }
 
 function Remove-SeanceModeleExercice {
@@ -170,7 +172,7 @@ function New-SeanceDepuisModele {
     $exercices = @(Get-SeanceModeleExercices -DbPath $DbPath -SeanceModeleId $SeanceModeleId)
     foreach ($ex in $exercices) {
         $nouvelExerciceId = New-SeanceExercice -DbPath $DbPath -SeanceId $seanceId -ExerciceId ([int]$ex.exercice_id) `
-            -Series $ex.series -Repetitions $ex.repetitions -Charge $ex.charge -RecuperationS $ex.recuperation_s -Tempo $ex.tempo -Variante $ex.variante -Notes $ex.notes
+            -Series $ex.series -Repetitions $ex.repetitions -Charge $ex.charge -RecuperationS $ex.recuperation_s -Tempo $ex.tempo -Rir $ex.rir -Variante $ex.variante -Notes $ex.notes
         $seriesModele = @(Get-SeanceModeleExerciceSeries -DbPath $DbPath -SeanceModeleExerciceId ([int]$ex.id))
         foreach ($s in $seriesModele) {
             New-SeanceExerciceSerie -DbPath $DbPath -SeanceExerciceId $nouvelExerciceId -Repetitions $s.repetitions -Charge $s.charge -RecuperationS $s.recuperation_s | Out-Null

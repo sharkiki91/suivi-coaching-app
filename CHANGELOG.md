@@ -6,6 +6,17 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.23.0] - 2026-10-02
+
+### Ajouté
+- **RIR (Reps In Reserve)** : nouveau champ sur chaque exercice d'une séance et d'un modèle de séance, juste à côté du tempo (répétitions gardées en réserve avant l'échec, texte libre, ex. « 2 » ou « 1-2 »). Il est affiché dans les tableaux d'exercices et recopié lors d'une création de séance depuis un modèle. Les colonnes `rir` sont ajoutées automatiquement à la base.
+- **Colonnes Tempo et RIR au choix dans les exports du programme** : deux cases « Tempo » et « RIR » à droite des boutons d'export (écran Programmes) choisissent si ces colonnes apparaissent dans le PDF du programme, l'Excel du programme et la feuille de séance. Le choix est mémorisé et les deux sont cochées par défaut. La zone répétée à l'impression de la feuille de séance et le réimport s'adaptent aux colonnes présentes.
+
+## [1.22.1] - 2026-10-02
+
+### Corrigé
+- **Plus de retours à la ligne dans les fichiers Excel** (feuille de séance, Excel du programme, onglet TRACKING, modèle de tracking, Excel du plan nutrition). Chaque colonne est élargie automatiquement selon son contenu réel (en-têtes, noms d'exercices, d'aliments, de repas, dates…), mesuré dans la police de la cellule, pour que tout tienne sur une ligne. Exemples : MUSCLE CIBLE, RÉCUP, TEMPO, et les en-têtes du TRACKING comme MOTIVATION (1-5). Les retours à la ligne voulus (notes d'un exercice sous son nom, « BILAN / SEMAINE n ») sont conservés. Les titres et consignes sur plusieurs colonnes ne sont pas concernés.
+
 ## [1.22.0] - 2026-10-02
 
 ### Ajouté
