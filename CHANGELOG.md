@@ -6,6 +6,13 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.21.0] - 2026-10-02
+
+### Modifié
+- **Feuille de séance Excel** : **12 blocs "SEMAINE 1…12"** au lieu de 6 blocs "SÉANCE" (une séance notée par semaine pendant 12 semaines). À l'impression, chaque séance tient sur la hauteur d'une page paysage, avec le programme répété à gauche de chaque page (semaines 1 à 6, puis 7 à 12).
+- **Tracking quotidien sur 52 semaines, dans le même fichier** : la feuille de séance contient un onglet **TRACKING** (une ligne par jour sur 52 semaines, dates déjà remplies à partir de la date de début du programme, ou du lundi de la semaine en cours, bande S1…S52 par semaine) : le client ne remplit plus qu'un seul fichier. Le modèle vierge du tracking quotidien utilise ce même onglet (52 semaines à partir du lundi de la semaine en cours).
+- **Import unique** : les boutons "Importer" de Séances réalisées et de Tracking quotidien acceptent le même fichier et rangent chaque information à sa place (blocs SEMAINE datés → séances réalisées, jours remplis du TRACKING → tracking quotidien), avec un bilan des deux. Les jours laissés vides sont ignorés ; un jour rempli sans date est signalé. Les anciennes feuilles de séance et anciens modèles de suivi restent importables.
+
 ## [1.20.1] - 2026-10-01
 
 ### Corrigé

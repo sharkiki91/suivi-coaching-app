@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.20.1'
+$AppVersion = '1.21.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -1283,7 +1283,7 @@ $GridSeanceExercices.Add_SelectionChanged({
         $dialog.FileName = "Feuille_de_seance.xlsx"
         if ($dialog.ShowDialog()) {
             Export-FeuilleSeanceExcel -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Path $dialog.FileName
-            Show-Info "Feuille de séance créée (même présentation que ton onglet TRAINING : programme à gauche, 6 blocs SÉANCE à droite ; un onglet par séance, chacun s'imprime en entier sur une page).`n`nEnvoie-la à ton client : à chaque séance, il note la DATE en haut d'un bloc puis ses répétitions et charges série par série. Réimporte-la ensuite via Suivi > Séances réalisées (chaque bloc daté devient une séance réalisée)."
+            Show-Info "Feuille de séance créée (même présentation que ton onglet TRAINING : programme à gauche, 12 blocs SEMAINE à droite ; un onglet par séance), avec un onglet TRACKING pour le suivi quotidien sur 52 semaines.`n`nEnvoie ce seul fichier à ton client : chaque semaine il note la DATE en haut d'un bloc puis ses répétitions et charges série par série, et chaque jour il remplit sa ligne dans TRACKING. Réimporte-le ensuite via Suivi (Séances réalisées ou Tracking quotidien, au choix) : les séances et le suivi quotidien sont rangés chacun à leur place."
         }
     }
 })
@@ -1648,6 +1648,23 @@ function Update-VueSuiviComplet {
 
 $CmbSuiviClient.Add_SelectionChanged({ Update-VueSuiviComplet })
 
+function Invoke-ImportFichierClient {
+    <# Import du fichier renvoye par le client (seances + tracking dans un seul fichier) : utilise par les deux boutons d'import. #>
+    if (-not $CmbSuiviClient.SelectedItem) { Show-Erreur "Sélectionne d'abord un client."; return }
+    $dialog = New-Object Microsoft.Win32.OpenFileDialog
+    $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
+    if (-not $dialog.ShowDialog()) { return }
+    $res = Import-FichierSuiviClient -DbPath $DbPath -ClientId $CmbSuiviClient.SelectedItem.id -ExcelPath $dialog.FileName
+    $parties = @()
+    if ($res.SeancesTrouvees) { $parties += "Séances réalisées : $($res.SeancesImportees) exercice(s) importé(s), $($res.SeancesSansDate) bloc(s) rempli(s) sans date ignoré(s)" }
+    if ($res.TrackingTrouve) { $parties += "Tracking quotidien : $($res.JoursImportes) jour(s) importé(s), $($res.JoursSansDate) ligne(s) remplie(s) sans date ignorée(s)" }
+    $message = $parties -join "`n"
+    if ($res.Erreurs.Count -gt 0) { $message += "`n`nRemarques :`n" + ($res.Erreurs -join "`n") }
+    Show-Info $message "Import terminé"
+    Update-VueSuiviQuotidien
+    Update-VueSeancesRealisees
+}
+
 # --- Questionnaires : logique ---
 
 function Format-DetailReponse {
@@ -1798,16 +1815,7 @@ function Update-VueSuiviQuotidien {
 
 (Get-Ctrl 'BtnImporterTracking').Add_Click({
     Invoke-Protege {
-        if (-not $CmbSuiviClient.SelectedItem) { Show-Erreur "Sélectionne d'abord un client."; return }
-        $dialog = New-Object Microsoft.Win32.OpenFileDialog
-        $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
-        if ($dialog.ShowDialog()) {
-            $res = Import-TrackingDepuisExcel -DbPath $DbPath -ClientId $CmbSuiviClient.SelectedItem.id -ExcelPath $dialog.FileName
-            $message = "Jours importés : $($res.Importes)`nLignes sans date ignorées : $($res.IgnoresSansDate)"
-            if ($res.Erreurs.Count -gt 0) { $message += "`n`nRemarques :`n" + ($res.Erreurs -join "`n") }
-            Show-Info $message "Import terminé"
-            Update-VueSuiviQuotidien
-        }
+        Invoke-ImportFichierClient
     }
 })
 
@@ -1969,16 +1977,7 @@ $GridSeancesRealisees.Add_SelectionChanged({ Update-VueExercicesRealises })
 
 (Get-Ctrl 'BtnImporterSeancesRealisees').Add_Click({
     Invoke-Protege {
-        if (-not $CmbSuiviClient.SelectedItem) { Show-Erreur "Sélectionne d'abord un client."; return }
-        $dialog = New-Object Microsoft.Win32.OpenFileDialog
-        $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
-        if ($dialog.ShowDialog()) {
-            $res = Import-SeanceRealiseeDepuisExcel -DbPath $DbPath -ClientId $CmbSuiviClient.SelectedItem.id -ExcelPath $dialog.FileName
-            $message = "Lignes importées : $($res.Importees)`nLignes sans date ignorées : $($res.IgnoreesSansDate)"
-            if ($res.Erreurs.Count -gt 0) { $message += "`n`nRemarques :`n" + ($res.Erreurs -join "`n") }
-            Show-Info $message "Import terminé"
-            Update-VueSeancesRealisees
-        }
+        Invoke-ImportFichierClient
     }
 })
 

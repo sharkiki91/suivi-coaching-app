@@ -298,32 +298,96 @@ function Import-QuestionnaireDepuisExcel {
 }
 
 function Export-ModeleTrackingExcel {
-    <# Genere un fichier Excel vierge (avec une ligne d'exemple) au format impose pour le suivi quotidien du client. #>
-    param([Parameter(Mandatory)] [string] $Path)
-
-    $exemple = [pscustomobject]@{
-        'Date' = '01/09/2026'
-        'Poids (kg)' = 82.5
-        'Sommeil (h)' = 7.5
-        'Qualite sommeil (1-5)' = 4
-        'Heure coucher' = '23:00'
-        'Heure lever' = '07:00'
-        'Energie (1-5)' = 3
-        'Adhesion nutrition (1-5)' = 4
-        'Digestion (1-5)' = 4
-        'Nb pas' = 8500
-        'Cardio (min)' = 20
-        'Motivation (1-5)' = 4
-        'Tension systolique' = $null
-        'Tension diastolique' = $null
-        'Bilan' = 'Exemple de ligne a remplacer - une ligne par jour'
-    }
+    <#
+        Genere le modele de suivi quotidien a envoyer au client : l'onglet TRACKING (52 semaines, dates
+        deja remplies a partir de -DateDebut, lundi de la semaine en cours par defaut). C'est le meme
+        onglet que celui inclus dans la feuille de seance (Programmes > Exporter la feuille de seance).
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $Path,
+        [datetime] $DateDebut = (Get-LundiCetteSemaine)
+    )
     if (Test-Path $Path) { Remove-Item $Path -Force }
-    $exemple | Export-Excel -Path $Path -WorksheetName 'Suivi' -AutoSize -TableStyle Medium2 -FreezeTopRow
+    $pkg = Open-ExcelPackage -Path $Path -Create
+    try {
+        Add-OngletTrackingExcel -Pkg $pkg -DateDebut $DateDebut.Date
+    } finally {
+        Close-ExcelPackage $pkg
+    }
+}
+
+function Import-LigneTracking {
+    <#
+        Enregistre une ligne de suivi quotidien (objet dont les proprietes portent les noms de colonnes
+        du modele : 'Date', 'Poids (kg)'...). Une ligne sans aucune valeur saisie (date seule, deja
+        pre-remplie dans le modele) est ignoree sans bruit ; une ligne remplie sans date est comptee.
+    #>
+    param([string] $DbPath, [int] $ClientId, $Ligne, $Resultat)
+
+    # Une colonne supprimee par le client ne doit pas faire echouer toute la ligne : elle est simplement vide.
+    $v = { param([string]$Nom) Get-ValeurColonne $Ligne $Nom }
+    if ([string](& $v 'Bilan') -like 'Exemple de ligne a remplacer*') { return }
+    $champs = @('Poids (kg)', 'Sommeil (h)', 'Qualite sommeil (1-5)', 'Heure coucher', 'Heure lever', 'Energie (1-5)',
+        'Adhesion nutrition (1-5)', 'Digestion (1-5)', 'Nb pas', 'Cardio (min)', 'Motivation (1-5)',
+        'Tension systolique', 'Tension diastolique', 'Bilan')
+    $renseigne = $false
+    foreach ($c in $champs) { if (Get-TexteImportOuNull (& $v $c)) { $renseigne = $true; break } }
+    if (-not $renseigne) { return }
+    $dateIso = ConvertTo-DateIso (& $v 'Date')
+    if (-not $dateIso) { $Resultat.IgnoresSansDate++; return }
+    try {
+        Set-SuiviQuotidienJour -DbPath $DbPath -ClientId $ClientId -Date $dateIso `
+            -Poids (ConvertTo-DoubleTolerant (& $v 'Poids (kg)')) `
+            -SommeilHeures (ConvertTo-DoubleTolerant (& $v 'Sommeil (h)')) `
+            -QualiteSommeil (ConvertTo-DoubleTolerant (& $v 'Qualite sommeil (1-5)')) `
+            -HeureCoucher ([string](& $v 'Heure coucher')) -HeureLever ([string](& $v 'Heure lever')) `
+            -Energie (ConvertTo-DoubleTolerant (& $v 'Energie (1-5)')) `
+            -AdhesionNutrition (ConvertTo-DoubleTolerant (& $v 'Adhesion nutrition (1-5)')) `
+            -Digestion (ConvertTo-DoubleTolerant (& $v 'Digestion (1-5)')) `
+            -NbPas (ConvertTo-DoubleTolerant (& $v 'Nb pas')) -CardioMinutes (ConvertTo-DoubleTolerant (& $v 'Cardio (min)')) `
+            -Motivation (ConvertTo-DoubleTolerant (& $v 'Motivation (1-5)')) `
+            -TensionSystolique (ConvertTo-DoubleTolerant (& $v 'Tension systolique')) -TensionDiastolique (ConvertTo-DoubleTolerant (& $v 'Tension diastolique')) `
+            -Bilan ([string](& $v 'Bilan'))
+        $Resultat.Importes++
+    } catch {
+        $Resultat.Erreurs.Add("Suivi du $dateIso : $($_.Exception.Message)")
+    }
+}
+
+function Import-TrackingOngletCoach {
+    <#
+        Lit un onglet TRACKING genere par Add-OngletTrackingExcel : ligne d'en-tetes reperee par "T|" en
+        colonne A (masquee), puis une ligne "J|" par jour. Chaque valeur est retrouvee par son en-tete.
+    #>
+    param([string] $DbPath, [int] $ClientId, $Ws, $Resultat)
+
+    $finLigne = $Ws.Dimension.End.Row; $finCol = $Ws.Dimension.End.Column
+    $entetes = @{}
+    for ($r = 1; $r -le $finLigne; $r++) {
+        $repere = [string]$Ws.Cells[$r, 1].Value
+        if ($repere -like 'T|*') {
+            $entetes = @{}
+            for ($c = 2; $c -le $finCol; $c++) {
+                $nom = ([string]$Ws.Cells[$r, $c].Text).Trim()
+                if ($nom) { $entetes[$c] = $nom }
+            }
+            continue
+        }
+        if ($repere -notlike 'J|*' -or $entetes.Count -eq 0) { continue }
+        $valeurs = [ordered]@{}
+        foreach ($c in $entetes.Keys) {
+            # Heures saisies malgre tout en format heure : on garde le texte affiche ("23:00")
+            $valeurs[$entetes[$c]] = if ($entetes[$c] -like 'Heure*') { $Ws.Cells[$r, $c].Text } else { $Ws.Cells[$r, $c].Value }
+        }
+        Import-LigneTracking -DbPath $DbPath -ClientId $ClientId -Ligne ([pscustomobject]$valeurs) -Resultat $Resultat
+    }
 }
 
 function Import-TrackingDepuisExcel {
-    <# Importe le suivi quotidien d'un client depuis un fichier au format du modele (Export-ModeleTrackingExcel). #>
+    <#
+        Importe le suivi quotidien d'un client : onglet TRACKING (modele actuel ou feuille de seance),
+        ou ancien modele en tableau (une ligne par jour, colonnes 'Date', 'Poids (kg)'...).
+    #>
     param(
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $ClientId,
@@ -331,34 +395,34 @@ function Import-TrackingDepuisExcel {
     )
 
     $resultat = [ordered]@{ Importes = 0; IgnoresSansDate = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
+    $ongletTrouve = $false
+    $pkg = Open-ExcelPackage -Path $ExcelPath
+    try {
+        foreach ($ws in $pkg.Workbook.Worksheets) {
+            if (-not $ws.Dimension) { continue }
+            if (Test-OngletAvecRepere -Ws $ws -Repere 'T|*') {
+                Import-TrackingOngletCoach -DbPath $DbPath -ClientId $ClientId -Ws $ws -Resultat $resultat
+                $ongletTrouve = $true
+            }
+        }
+    } finally {
+        Close-ExcelPackage $pkg -NoSave
+    }
+    if ($ongletTrouve) { return [pscustomobject]$resultat }
+
     $lignes = @(Import-Excel -Path $ExcelPath)
     Test-ColonnesRequises -Lignes $lignes -Colonnes @('Date') -DescriptionFichier 'un suivi quotidien (modele a telecharger depuis l''application)'
-
     foreach ($ligne in $lignes) {
-        # Une colonne supprimee par le client ne doit pas faire echouer toute la ligne : elle est simplement vide.
-        $v = { param([string]$Nom) Get-ValeurColonne $ligne $Nom }
-        if ([string](& $v 'Bilan') -like 'Exemple de ligne a remplacer*') { continue }
-        $dateIso = ConvertTo-DateIso (& $v 'Date')
-        if (-not $dateIso) { $resultat.IgnoresSansDate++; continue }
-        try {
-            Set-SuiviQuotidienJour -DbPath $DbPath -ClientId $ClientId -Date $dateIso `
-                -Poids (ConvertTo-DoubleTolerant (& $v 'Poids (kg)')) `
-                -SommeilHeures (ConvertTo-DoubleTolerant (& $v 'Sommeil (h)')) `
-                -QualiteSommeil (ConvertTo-DoubleTolerant (& $v 'Qualite sommeil (1-5)')) `
-                -HeureCoucher ([string](& $v 'Heure coucher')) -HeureLever ([string](& $v 'Heure lever')) `
-                -Energie (ConvertTo-DoubleTolerant (& $v 'Energie (1-5)')) `
-                -AdhesionNutrition (ConvertTo-DoubleTolerant (& $v 'Adhesion nutrition (1-5)')) `
-                -Digestion (ConvertTo-DoubleTolerant (& $v 'Digestion (1-5)')) `
-                -NbPas (ConvertTo-DoubleTolerant (& $v 'Nb pas')) -CardioMinutes (ConvertTo-DoubleTolerant (& $v 'Cardio (min)')) `
-                -Motivation (ConvertTo-DoubleTolerant (& $v 'Motivation (1-5)')) `
-                -TensionSystolique (ConvertTo-DoubleTolerant (& $v 'Tension systolique')) -TensionDiastolique (ConvertTo-DoubleTolerant (& $v 'Tension diastolique')) `
-                -Bilan ([string](& $v 'Bilan'))
-            $resultat.Importes++
-        } catch {
-            $resultat.Erreurs.Add("Ligne du $dateIso : $($_.Exception.Message)")
-        }
+        Import-LigneTracking -DbPath $DbPath -ClientId $ClientId -Ligne $ligne -Resultat $resultat
     }
     return [pscustomobject]$resultat
+}
+
+function Test-OngletAvecRepere {
+    <# Vrai si la colonne A (masquee) de l'onglet contient le repere technique donne dans ses 30 premieres lignes. #>
+    param($Ws, [string] $Repere)
+    for ($r = 1; $r -le [math]::Min($Ws.Dimension.End.Row, 30); $r++) { if ([string]$Ws.Cells[$r, 1].Value -like $Repere) { return $true } }
+    return $false
 }
 
 function Export-ModeleRoadmapExcel {
@@ -599,9 +663,7 @@ function Import-SeanceRealiseeDepuisExcel {
     try {
         foreach ($ws in $pkg.Workbook.Worksheets) {
             if (-not $ws.Dimension) { continue }
-            $estFormatCoach = $false
-            for ($r = 1; $r -le [math]::Min($ws.Dimension.End.Row, 30); $r++) { if ([string]$ws.Cells[$r, 1].Value -like 'D|*') { $estFormatCoach = $true; break } }
-            if ($estFormatCoach) {
+            if (Test-OngletAvecRepere -Ws $ws -Repere 'D|*') {
                 Import-FeuilleSeanceFormatCoach -DbPath $DbPath -ClientId $ClientId -Ws $ws -Resultat $resultat
                 $formatCoachTrouve = $true
             }
@@ -656,7 +718,61 @@ function Import-SeanceRealiseeDepuisExcel {
     return [pscustomobject]$resultat
 }
 
+function Import-FichierSuiviClient {
+    <#
+        Import unique du fichier renvoye par le client (bouton d'import des seances realisees comme
+        du tracking) : chaque onglet est reconnu a son repere en colonne A masquee et range au bon
+        endroit — onglets de seance ("D|") -> seances realisees, onglet TRACKING ("T|") -> suivi
+        quotidien. Les anciens fichiers en tableau (feuille de seance ou modele de suivi) restent acceptes.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [int] $ClientId,
+        [Parameter(Mandatory)] [string] $ExcelPath
+    )
+
+    $erreurs = New-Object System.Collections.Generic.List[string]
+    $resSeances = [ordered]@{ Importees = 0; IgnoreesSansDate = 0; Erreurs = $erreurs }
+    $resJours = [ordered]@{ Importes = 0; IgnoresSansDate = 0; Erreurs = $erreurs }
+    $seancesTrouvees = $false; $trackingTrouve = $false
+    $pkg = Open-ExcelPackage -Path $ExcelPath
+    try {
+        foreach ($ws in $pkg.Workbook.Worksheets) {
+            if (-not $ws.Dimension) { continue }
+            if (Test-OngletAvecRepere -Ws $ws -Repere 'D|*') {
+                Import-FeuilleSeanceFormatCoach -DbPath $DbPath -ClientId $ClientId -Ws $ws -Resultat $resSeances
+                $seancesTrouvees = $true
+            } elseif (Test-OngletAvecRepere -Ws $ws -Repere 'T|*') {
+                Import-TrackingOngletCoach -DbPath $DbPath -ClientId $ClientId -Ws $ws -Resultat $resJours
+                $trackingTrouve = $true
+            }
+        }
+    } finally {
+        Close-ExcelPackage $pkg -NoSave
+    }
+
+    if (-not $seancesTrouvees -and -not $trackingTrouve) {
+        # Ancien format en tableau : feuille de seance (colonne SeanceExerciceId) ou modele de suivi quotidien
+        $premiere = @(Import-Excel -Path $ExcelPath) | Select-Object -First 1
+        if ($premiere -and $premiere.PSObject.Properties['SeanceExerciceId']) {
+            $r = Import-SeanceRealiseeDepuisExcel -DbPath $DbPath -ClientId $ClientId -ExcelPath $ExcelPath
+            $resSeances.Importees = $r.Importees; $resSeances.IgnoreesSansDate = $r.IgnoreesSansDate; $erreurs.AddRange($r.Erreurs)
+            $seancesTrouvees = $true
+        } else {
+            $r = Import-TrackingDepuisExcel -DbPath $DbPath -ClientId $ClientId -ExcelPath $ExcelPath
+            $resJours.Importes = $r.Importes; $resJours.IgnoresSansDate = $r.IgnoresSansDate; $erreurs.AddRange($r.Erreurs)
+            $trackingTrouve = $true
+        }
+    }
+
+    return [pscustomobject]@{
+        SeancesTrouvees = $seancesTrouvees; SeancesImportees = $resSeances.Importees; SeancesSansDate = $resSeances.IgnoreesSansDate
+        TrackingTrouve = $trackingTrouve; JoursImportes = $resJours.Importes; JoursSansDate = $resJours.IgnoresSansDate
+        Erreurs = $erreurs
+    }
+}
+
 Export-ModuleMember -Function Import-BibliothequesDepuisExcel, Export-DonneesVersExcel, Get-EnTetesExcel, `
     Import-QuestionnaireDepuisExcel, Export-ModeleTrackingExcel, Import-TrackingDepuisExcel, `
     Export-ModeleRoadmapExcel, Import-RoadmapDepuisExcel, Import-JournalAlimentaireDepuisFatSecret, `
-    Import-SeanceRealiseeDepuisExcel
+    Import-SeanceRealiseeDepuisExcel, Import-FichierSuiviClient

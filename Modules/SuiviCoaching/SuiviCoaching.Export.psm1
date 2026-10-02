@@ -259,7 +259,15 @@ $Script:CouleurViolet = '#674EA7'     # en-tetes, colonne #, noms d'exercices
 $Script:CouleurLavande = '#8E7CC3'    # bande du nom de seance, titres "SEANCE n"
 $Script:CouleurSeparateur = '#B7B7B7' # trait entre deux exercices
 $Script:CouleurLigneSerie = '#D9D2E9' # trait leger entre deux series (zones a remplir)
-$Script:NbBlocsSuivi = 6              # nombre de seances a noter cote a cote (comme le fichier d'origine)
+$Script:NbBlocsSuivi = 12             # nombre de semaines a noter cote a cote (une seance par semaine et par bloc)
+$Script:NbBlocsParPage = 6            # a l'impression : programme + 6 semaines par page
+$Script:NbSemainesTracking = 52       # onglet TRACKING : un an de suivi quotidien
+# En-tetes de l'onglet TRACKING = noms de colonnes du modele de suivi quotidien (l'import retrouve chaque valeur par son en-tete)
+$Script:ColonnesTracking = [ordered]@{
+    'Poids (kg)' = 8; 'Sommeil (h)' = 8; 'Qualite sommeil (1-5)' = 9; 'Heure coucher' = 8; 'Heure lever' = 8
+    'Energie (1-5)' = 8; 'Adhesion nutrition (1-5)' = 10; 'Digestion (1-5)' = 9; 'Nb pas' = 8; 'Cardio (min)' = 8
+    'Motivation (1-5)' = 9; 'Tension systolique' = 9; 'Tension diastolique' = 9; 'Bilan' = 40
+}
 
 function Set-StyleExcel {
     <# Applique un style "charte coach" a une plage EPPlus. #>
@@ -316,14 +324,89 @@ function Get-LignesSeriesExercice {
     }
 }
 
+function Get-LundiCetteSemaine {
+    $aujourdhui = (Get-Date).Date
+    return $aujourdhui.AddDays(-((([int]$aujourdhui.DayOfWeek) + 6) % 7))
+}
+
+function Add-OngletTrackingExcel {
+    <#
+        Ajoute l'onglet TRACKING (suivi quotidien) a un classeur : 52 semaines x 7 jours, une ligne par
+        jour, dates deja remplies a partir de -DateDebut. Colonne A masquee : "T|" sur la ligne
+        d'en-tetes, "J|" sur chaque ligne de jour, relus par Import-TrackingOngletCoach qui retrouve
+        chaque valeur par son en-tete (memes noms de colonnes que l'ancien modele de suivi).
+    #>
+    param(
+        [Parameter(Mandatory)] $Pkg,
+        [Parameter(Mandatory)] [datetime] $DateDebut,
+        [string] $Titre = 'SUIVI QUOTIDIEN',
+        [int] $NbSemaines = $Script:NbSemainesTracking
+    )
+
+    $ws = Add-Worksheet -ExcelPackage $Pkg -WorksheetName 'TRACKING'
+    $ws.View.ShowGridLines = $false
+    $ws.Column(1).Hidden = $true
+    $cSemaine = 2; $cDate = 3; $cPremier = 4
+    $cFin = $cPremier + $Script:ColonnesTracking.Count - 1
+    $ws.Column($cSemaine).Width = 6; $ws.Column($cDate).Width = 15
+    $i = 0; foreach ($k in $Script:ColonnesTracking.Keys) { $ws.Column($cPremier + $i).Width = $Script:ColonnesTracking[$k]; $i++ }
+
+    Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 1 -C1 $cSemaine -L2 1 -C2 $cFin -Valeur $Titre) -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Taille 12 -Gras
+    $ws.Row(1).Height = 24
+    $consigne = "Chaque jour : remplis la ligne du jour (les dates sont deja indiquees). Notes de 1 (mauvais) a 5 (excellent), heures au format 23:00. Laisse vide ce que tu n'as pas mesure."
+    Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 2 -C1 $cSemaine -L2 2 -C2 $cFin -Valeur $consigne) -Couleur $Script:CouleurViolet -Italique -Gauche
+    $ws.Row(2).Height = 26
+
+    $lEntete = 4
+    $ws.Cells[$lEntete, 1].Value = 'T|'
+    $ws.Cells[$lEntete, $cSemaine].Value = 'SEM.'
+    $ws.Cells[$lEntete, $cDate].Value = 'Date'
+    $i = 0; foreach ($k in $Script:ColonnesTracking.Keys) { $ws.Cells[$lEntete, ($cPremier + $i)].Value = $k; $i++ }
+    Set-StyleExcel -Plage $ws.Cells[$lEntete, $cSemaine, $lEntete, $cFin] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras -Taille 8
+    $ws.Row($lEntete).Height = 30
+
+    $lDebut = $lEntete + 1
+    $lFin = $lDebut + $NbSemaines * 7 - 1
+    for ($n = 0; $n -lt $NbSemaines * 7; $n++) {
+        $ws.Cells[($lDebut + $n), 1].Value = 'J|'
+        $ws.Cells[($lDebut + $n), $cDate].Value = $DateDebut.AddDays($n)
+    }
+    $pDates = $ws.Cells[$lDebut, $cDate, $lFin, $cDate]
+    Set-StyleExcel -Plage $pDates -Couleur $Script:CouleurViolet -Gras -Gauche
+    $pDates.Style.Numberformat.Format = 'ddd dd/mm/yyyy'
+    $pSaisie = $ws.Cells[$lDebut, $cPremier, $lFin, $cFin]
+    Set-StyleExcel -Plage $pSaisie -Couleur '#000000' -Taille 10
+    Set-BordureExcel -Plage $pSaisie -Cotes @('Bottom', 'Right') -Couleur $Script:CouleurLigneSerie -Epaisseur 'Thin'
+    $ws.Cells[$lDebut, $cFin, $lFin, $cFin].Style.HorizontalAlignment = [OfficeOpenXml.Style.ExcelHorizontalAlignment]::Left
+    # Heures en texte : "23:00" saisi par le client reste "23:00" (et pas une fraction de jour)
+    $i = 0; foreach ($k in $Script:ColonnesTracking.Keys) {
+        if ($k -like 'Heure*') { $ws.Cells[$lDebut, ($cPremier + $i), $lFin, ($cPremier + $i)].Style.Numberformat.Format = '@' }
+        $i++
+    }
+    # Bande "S1..S52" par semaine, trait violet entre deux semaines
+    for ($s = 0; $s -lt $NbSemaines; $s++) {
+        $l1 = $lDebut + $s * 7; $l2 = $l1 + 6
+        Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $cSemaine -L2 $l2 -C2 $cSemaine -Valeur "S$($s + 1)") -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras -Taille 10
+        Set-BordureExcel -Plage $ws.Cells[$l2, $cSemaine, $l2, $cFin] -Cotes @('Bottom') -Couleur $Script:CouleurViolet
+    }
+
+    $ws.View.FreezePanes(($lEntete + 1), $cPremier)
+    $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
+    $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 0
+    $ws.PrinterSettings.RepeatRows = New-Object OfficeOpenXml.ExcelAddress('$4:$4')
+    $ws.PrinterSettings.TopMargin = 0.4; $ws.PrinterSettings.BottomMargin = 0.4; $ws.PrinterSettings.LeftMargin = 0.3; $ws.PrinterSettings.RightMargin = 0.3
+}
+
 function Export-FeuilleSeanceExcel {
     <#
         Genere la feuille de suivi des performances a remplir par le client, sur le modele de
         l'onglet TRAINING du fichier d'origine du coach : pour chaque seance, le programme a gauche
         (une ligne par serie : #, exercice, variante, set, reps, charge, recup, tempo, muscle, lien)
-        et, a droite, 6 blocs "SEANCE 1..6" cote a cote (DATE, puis REPS / CHARGE par serie et NOTES
-        par exercice) pour noter 6 seances successives. La partie programme reste figee a l'ecran.
-        Un onglet par seance (nomme comme la seance), imprime en entier sur une seule page paysage.
+        et, a droite, 12 blocs "SEMAINE 1..12" cote a cote (DATE, puis REPS / CHARGE par serie et NOTES
+        par exercice) pour noter 12 seances successives. La partie programme reste figee a l'ecran.
+        Un onglet par seance (nomme comme la seance), imprime sur une hauteur de page paysage
+        (programme + 6 semaines par page). Un dernier onglet TRACKING (Add-OngletTrackingExcel) recoit
+        le suivi quotidien sur 52 semaines : le client n'a qu'un seul fichier a remplir.
 
         La colonne A (masquee) contient des reperes techniques ("D|seanceId" sur la ligne des dates,
         "S|seanceId|seanceExerciceId|serie" sur chaque ligne de serie) relus par
@@ -341,7 +424,7 @@ function Export-FeuilleSeanceExcel {
     )
 
     $prog = Invoke-SqliteQuery -DataSource $DbPath -Query @"
-SELECT p.nom, c.nom AS client_nom, c.prenom AS client_prenom
+SELECT p.nom, p.date_debut, c.nom AS client_nom, c.prenom AS client_prenom
 FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
 "@ -SqlParameters @{ Id = $ProgrammeId }
     $seances = @(Get-Seances -DbPath $DbPath -ProgrammeId $ProgrammeId)
@@ -356,8 +439,9 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
     $pkg = Open-ExcelPackage -Path $Path -Create
     try {
         $titre = "PROGRAMME $($prog.nom) - $($prog.client_prenom) $($prog.client_nom)".ToUpperInvariant()
-        $consigne = if ($NbBlocs -gt 0) { "A chaque seance : note la DATE en haut d'un bloc SEANCE, puis tes repetitions et la charge serie par serie (et une note si besoin). Seance suivante = bloc suivant." } else { $TexteConsigne }
+        $consigne = if ($NbBlocs -gt 0) { "Chaque semaine : note la DATE de ta seance en haut du bloc SEMAINE, puis tes repetitions et la charge serie par serie (et une note si besoin). Semaine suivante = bloc suivant. Ton suivi quotidien se remplit dans l'onglet TRACKING." } else { $TexteConsigne }
         $nomsOnglets = @{}
+        if ($NbBlocs -gt 0) { $nomsOnglets['TRACKING'] = $true }   # nom reserve a l'onglet de suivi quotidien
 
         # Un onglet par seance : chaque tableau s'imprime en entier sur une seule page, sans etre coupe en deux.
         foreach ($s in $seances) {
@@ -406,7 +490,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
             # Blocs SEANCE n : titre, ligne DATE a remplir, en-tetes
             for ($b = 0; $b -lt $NbBlocs; $b++) {
                 $c0 = $cPremierBloc + $b * $largeurBloc
-                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lTitre -C1 $c0 -L2 $lTitre -C2 ($c0 + 3) -Valeur "SEANCE $($b + 1)") -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras -Taille 10
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lTitre -C1 $c0 -L2 $lTitre -C2 ($c0 + 3) -Valeur "SEMAINE $($b + 1)") -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras -Taille 10
                 Set-StyleExcel -Plage $ws.Cells[$lDate, $c0] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras -Taille 8
                 $ws.Cells[$lDate, $c0].Style.WrapText = $false
                 $ws.Cells[$lDate, $c0].Value = 'DATE'
@@ -487,15 +571,25 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
 
             # La partie programme reste visible quand on fait defiler les blocs SEANCE vers la droite
             if ($NbBlocs -gt 0) { $ws.View.FreezePanes(1, ($cFin + 2)) }
-            # Impression : tout l'onglet (donc toute la seance) sur une seule page paysage
+            # Impression : toute la seance sur une hauteur de page paysage ; au-dela de 6 semaines, le programme
+            # est repete a gauche de chaque page (programme + semaines 1-6, puis programme + semaines 7-12).
+            # Les deux moities ont la meme largeur, donc la mise a l'echelle d'Excel coupe entre la semaine 6 et 7.
             $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
-            $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 1
+            $nbPagesLargeur = [math]::Max(1, [math]::Ceiling($NbBlocs / $Script:NbBlocsParPage))
+            $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = $nbPagesLargeur; $ws.PrinterSettings.FitToHeight = 1
+            if ($nbPagesLargeur -gt 1) { $ws.PrinterSettings.RepeatColumns = New-Object OfficeOpenXml.ExcelAddress('$B:$M') }
             $ws.PrinterSettings.HorizontalCentered = $true
             $ws.PrinterSettings.TopMargin = 0.4; $ws.PrinterSettings.BottomMargin = 0.4; $ws.PrinterSettings.LeftMargin = 0.3; $ws.PrinterSettings.RightMargin = 0.3
         }
 
+        if ($NbBlocs -gt 0) {
+            # Suivi quotidien dans le meme fichier, a partir du debut du programme (sinon du lundi de cette semaine)
+            $debut = if ($prog.date_debut) { ([datetime]$prog.date_debut).Date } else { Get-LundiCetteSemaine }
+            Add-OngletTrackingExcel -Pkg $pkg -DateDebut $debut -Titre "SUIVI QUOTIDIEN - $($prog.client_prenom) $($prog.client_nom)".ToUpperInvariant()
+        }
+
         # Un classeur Excel doit contenir au moins un onglet
-        if ($nomsOnglets.Count -eq 0) {
+        if ($pkg.Workbook.Worksheets.Count -eq 0) {
             $ws = Add-Worksheet -ExcelPackage $pkg -WorksheetName 'TRAINING'
             $ws.Cells[1, 2].Value = 'Aucune seance avec des exercices dans ce programme.'
         }
@@ -758,4 +852,5 @@ FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
 }
 
 Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, `
-    Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries
+    Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries, `
+    Add-OngletTrackingExcel, Get-LundiCetteSemaine
