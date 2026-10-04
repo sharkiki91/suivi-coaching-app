@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.23.0'
+$AppVersion = '1.24.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -172,10 +172,12 @@ function Show-DialogNouvelElement {
 
 function Show-DialogColonnesTracking {
     <#
-        Choix des colonnes de l'onglet TRACKING (groupees par theme) et de la case BILAN avant un export.
+        Choix des colonnes de l'onglet TRACKING (groupees par theme), de la case BILAN et du nombre de semaines
+        (tableau des seances avec -AvecSemainesSeance, tracking) avant un export.
         Le choix est enregistre (Set-ReglagesTracking) et repris par defaut la fois suivante.
         Retourne $true si le coach a valide, $false s'il a annule.
     #>
+    param([switch] $AvecSemainesSeance)
     $dlg = Import-XamlWindow -Path (Join-Path $AppRoot 'UI\DialogColonnesTracking.xaml')
     $dlg.Owner = $Window
     $panel = $dlg.FindName('PanelDialogColonnes')
@@ -200,6 +202,11 @@ function Show-DialogColonnesTracking {
     }
     $chkBilan.IsChecked = $reglages.AvecBilan
     $txtLien.Text = $reglages.LienBilan
+    $txtSemSeance = $dlg.FindName('TxtDialogSemainesSeance')
+    $txtSemTracking = $dlg.FindName('TxtDialogSemainesTracking')
+    $txtSemSeance.Text = [string](Get-ReglagesProgramme -DbPath $DbPath).NbSemainesSeance
+    $txtSemTracking.Text = [string]$reglages.NbSemaines
+    if (-not $AvecSemainesSeance) { $dlg.FindName('PanelDialogSemainesSeance').Visibility = 'Collapsed' }
 
     $dlg.FindName('BtnDialogAnnuler').Add_Click({ $dlg.DialogResult = $false })
     $dlg.FindName('BtnDialogValider').Add_Click({
@@ -207,7 +214,10 @@ function Show-DialogColonnesTracking {
         if ($cles.Count -eq 0) { Show-Erreur "Coche au moins une colonne."; return }
         $lien = $txtLien.Text.Trim()
         if ($lien -and -not ($lien -match '^https?://')) { Show-Erreur "Le lien du bilan doit commencer par http:// ou https://"; return }
-        Set-ReglagesTracking -DbPath $DbPath -Colonnes $cles -AvecBilan ([bool]$chkBilan.IsChecked) -LienBilan $lien
+        $nbSeance = 0; $nbTracking = 0
+        if ($AvecSemainesSeance -and -not ([int]::TryParse($txtSemSeance.Text.Trim(), [ref]$nbSeance) -and $nbSeance -ge 1 -and $nbSeance -le 52)) { Show-Erreur "Nombre de semaines du tableau des sÃ©ances : mets un nombre entre 1 et 52."; return }
+        if (-not ([int]::TryParse($txtSemTracking.Text.Trim(), [ref]$nbTracking) -and $nbTracking -ge 1 -and $nbTracking -le 104)) { Show-Erreur "Nombre de semaines du tracking : mets un nombre entre 1 et 104."; return }
+        Set-ReglagesTracking -DbPath $DbPath -Colonnes $cles -AvecBilan ([bool]$chkBilan.IsChecked) -LienBilan $lien -NbSemaines $nbTracking -NbSemainesSeance $nbSeance
         $dlg.DialogResult = $true
     })
     return [bool]$dlg.ShowDialog()
@@ -1042,6 +1052,7 @@ $TxtModExANotes = Get-Ctrl 'TxtModExANotes'
 $ChkModExADetailSeries = Get-Ctrl 'ChkModExADetailSeries'
 $Script:SelectedModeleId = $null
 $Script:SelectedModeleExerciceId = $null
+$Script:LigneModeleExerciceAvant = $null   # valeurs de la ligne avant modification (detail par serie)
 
 function Update-VueModeles {
     $ListeModeles.ItemsSource = @(Get-SeanceModeles -DbPath $DbPath)
@@ -1063,6 +1074,23 @@ function Clear-FormModeleExercice {
     $ChkModExADetailSeries.IsChecked = $false
     $GridModeleExercices.SelectedItem = $null
 }
+function Update-DetailSeriesDepuisFormulaire {
+    <#
+        Apres modification d'une ligne d'exercice : les champs reps / charge / recup changes dans le formulaire
+        sont appliques a toutes les series du detail par serie (sinon le detail, qui est ce qui s'affiche et
+        s'exporte, masquait la modification) ; un nouveau nombre de series ajuste le nombre de lignes du detail.
+    #>
+    param([string] $Contexte, [int] $LigneId, $Avant, [string] $Series, [string] $Repetitions, [string] $Charge, [string] $Recup)
+    if (-not $Avant) { return }
+    $champs = @{}
+    foreach ($c in @(@('repetitions', $Repetitions), @('charge', $Charge), @('recuperation_s', $Recup))) {
+        if ((Get-TexteOuNull $c[1]) -ne (Get-TexteOuNull ([string]$Avant.($c[0])))) { $champs[$c[0]] = Get-TexteOuNull $c[1] }
+    }
+    $nb = 0
+    if ((Get-TexteOuNull $Series) -and (Get-TexteOuNull $Series) -ne (Get-TexteOuNull ([string]$Avant.series))) { $nb = [int](Get-NombreSeriesExport -SeriesGlobal $Series) }
+    Update-SeriesDetailDepuisLigne -DbPath $DbPath -Contexte $Contexte -LigneId $LigneId -Champs $champs -NbSeries $nb
+}
+
 function Update-VueModeleExercices {
     $GridModeleExercices.ItemsSource = $null
     Clear-FormModeleExercice
@@ -1089,6 +1117,7 @@ $GridModeleExercices.Add_SelectionChanged({
     $item = $GridModeleExercices.SelectedItem
     if ($null -eq $item) { return }
     $Script:SelectedModeleExerciceId = [int]$item.id
+    $Script:LigneModeleExerciceAvant = $item
     $CmbModeleExerciceAAjouter.SelectedItem = $CmbModeleExerciceAAjouter.Items | Where-Object { [int]$_.id -eq [int]$item.exercice_id }
     $TxtModExASeries.Text = [string]$item.series
     $TxtModExARepetitions.Text = [string]$item.repetitions
@@ -1125,13 +1154,33 @@ $GridModeleExercices.Add_SelectionChanged({
 })
 (Get-Ctrl 'BtnModeleExerciceNouveau').Add_Click({ Clear-FormModeleExercice })
 
+function Move-ExerciceModeleSelectionne {
+    param([int] $Direction)
+    $item = $GridModeleExercices.SelectedItem
+    if (-not $item) { Show-Erreur "SÃ©lectionne un exercice dans le tableau."; return }
+    $id = [int]$item.id
+    Move-SeanceModeleExercice -DbPath $DbPath -Id $id -Direction $Direction
+    Update-VueModeleExercices
+    $GridModeleExercices.SelectedItem = $GridModeleExercices.Items | Where-Object { [int]$_.id -eq $id }
+}
+(Get-Ctrl 'BtnModeleExerciceMonter').Add_Click({ Invoke-Protege { Move-ExerciceModeleSelectionne -Direction -1 } })
+(Get-Ctrl 'BtnModeleExerciceDescendre').Add_Click({ Invoke-Protege { Move-ExerciceModeleSelectionne -Direction 1 } })
+
 (Get-Ctrl 'BtnModeleExerciceAjouter').Add_Click({
     Invoke-Protege {
         if (-not $ListeModeles.SelectedItem) { Show-Erreur "Selectionne d'abord un modele."; return }
         if ($Script:SelectedModeleExerciceId) {
-            Update-SeanceModeleExercice -DbPath $DbPath -Id $Script:SelectedModeleExerciceId `
+            $idModifie = [int]$Script:SelectedModeleExerciceId
+            $exerciceId = if ($CmbModeleExerciceAAjouter.SelectedItem) { [int]$CmbModeleExerciceAAjouter.SelectedItem.id } else { 0 }
+            Update-SeanceModeleExercice -DbPath $DbPath -Id $idModifie -ExerciceId $exerciceId `
                 -Series (Get-TexteOuNull $TxtModExASeries.Text) -Repetitions (Get-TexteOuNull $TxtModExARepetitions.Text) -Charge (Get-TexteOuNull $TxtModExACharge.Text) `
                 -RecuperationS (Get-TexteOuNull $TxtModExARecup.Text) -Tempo (Get-TexteOuNull $TxtModExATempo.Text) -Rir (Get-TexteOuNull $TxtModExARir.Text) -Variante (Get-TexteOuNull $TxtModExAVariante.Text) -Notes (Get-TexteOuNull $TxtModExANotes.Text)
+            Update-DetailSeriesDepuisFormulaire -Contexte 'Modele' -LigneId $idModifie -Avant $Script:LigneModeleExerciceAvant `
+                -Series $TxtModExASeries.Text -Repetitions $TxtModExARepetitions.Text -Charge $TxtModExACharge.Text -Recup $TxtModExARecup.Text
+            Update-VueModeleExercices
+            # La ligne reste selectionnee : le formulaire montre ce qui vient d'etre enregistre
+            $GridModeleExercices.SelectedItem = $GridModeleExercices.Items | Where-Object { [int]$_.id -eq $idModifie }
+            return
         } else {
             if (-not $CmbModeleExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
             $nomExercice = [string]$CmbModeleExerciceAAjouter.SelectedItem.affichage
@@ -1193,6 +1242,8 @@ $TxtExAVariante = Get-Ctrl 'TxtExAVariante'
 $TxtExANotes = Get-Ctrl 'TxtExANotes'
 $ChkExADetailSeries = Get-Ctrl 'ChkExADetailSeries'
 $Script:SelectedSeanceExerciceId = $null
+$Script:LigneSeanceExerciceAvant = $null   # valeurs de la ligne avant modification (detail par serie)
+$Script:EntetesRecap = @{}   # nom technique de colonne du recap -> nom de seance affiche
 
 function Clear-FormSeanceExercice {
     $Script:SelectedSeanceExerciceId = $null
@@ -1231,10 +1282,39 @@ function Update-VueSeances {
     if (-not $CmbProgrammeSelection.SelectedItem) { return }
     $seances = @(Get-Seances -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id)
     $ListeSeances.ItemsSource = $seances
+    Update-VueRecapSeries
     if ($seances.Count -eq 0) { return }
     $aSelectionner = $null
     if ($SelectionnerId) { $aSelectionner = $seances | Where-Object { [int]$_.id -eq $SelectionnerId } | Select-Object -First 1 }
     if ($aSelectionner) { $ListeSeances.SelectedItem = $aSelectionner } else { $ListeSeances.SelectedIndex = 0 }
+}
+
+$GridRecapSeries = Get-Ctrl 'GridRecapSeries'
+# Colonnes du recap nommees S0, S1... (un nom de seance avec des parentheses casserait la liaison WPF) : on remet le vrai nom en en-tete
+$GridRecapSeries.Add_AutoGeneratingColumn({
+    param($s, $e)
+    if ($Script:EntetesRecap.ContainsKey($e.PropertyName)) { $e.Column.Header = $Script:EntetesRecap[$e.PropertyName] }
+})
+
+function Update-VueRecapSeries {
+    $GridRecapSeries.ItemsSource = $null
+    if (-not $CmbProgrammeSelection.SelectedItem) { return }
+    $recap = Get-RecapSeriesMuscles -DbPath $DbPath -ProgrammeId ([int]$CmbProgrammeSelection.SelectedItem.id)
+    if ($recap.Lignes.Count -eq 0) { return }
+    $table = New-Object System.Data.DataTable
+    $Script:EntetesRecap = @{ 'Muscle' = 'Muscle'; 'Total' = 'Total semaine' }
+    [void]$table.Columns.Add('Muscle')
+    for ($i = 0; $i -lt $recap.Seances.Count; $i++) { [void]$table.Columns.Add("S$i"); $Script:EntetesRecap["S$i"] = $recap.Seances[$i] }
+    [void]$table.Columns.Add('Total')
+    foreach ($ligne in $recap.Lignes) {
+        $r = $table.NewRow(); $r['Muscle'] = $ligne.Muscle; $r['Total'] = [string]$ligne.Total
+        for ($i = 0; $i -lt $ligne.ParSeance.Count; $i++) { $r["S$i"] = if ($ligne.ParSeance[$i] -gt 0) { [string]$ligne.ParSeance[$i] } else { '' } }
+        $table.Rows.Add($r)
+    }
+    $r = $table.NewRow(); $r['Muscle'] = 'TOTAL'; $r['Total'] = [string]$recap.TotalSemaine
+    for ($i = 0; $i -lt $recap.TotalParSeance.Count; $i++) { $r["S$i"] = [string]$recap.TotalParSeance[$i] }
+    $table.Rows.Add($r)
+    $GridRecapSeries.ItemsSource = $table.DefaultView
 }
 
 function Update-VueSeanceExercices {
@@ -1250,6 +1330,7 @@ function Update-VueSeanceExercices {
         $e | Add-Member -NotePropertyName 'recuperation_affichage' -NotePropertyValue (Get-ValeurAvecDetailSeries -SeriesDetail $detail -ValeurGlobale $e.recuperation_s -NomChamp 'recuperation_s')
     }
     $GridSeanceExercices.ItemsSource = $exercices
+    Update-VueRecapSeries
 }
 
 $CmbProgrammeClient.Add_SelectionChanged({ Update-VueProgrammesPourClient })
@@ -1264,6 +1345,7 @@ $GridSeanceExercices.Add_SelectionChanged({
     $item = $GridSeanceExercices.SelectedItem
     if ($null -eq $item) { return }
     $Script:SelectedSeanceExerciceId = [int]$item.id
+    $Script:LigneSeanceExerciceAvant = $item
     $CmbExerciceAAjouter.SelectedItem = $CmbExerciceAAjouter.Items | Where-Object { [int]$_.id -eq [int]$item.exercice_id }
     $TxtExASeries.Text = [string]$item.series
     $TxtExARepetitions.Text = [string]$item.repetitions
@@ -1336,13 +1418,13 @@ foreach ($chk in $ChkProgrammeTempo, $ChkProgrammeRir) { $chk.Add_Checked($enreg
 (Get-Ctrl 'BtnProgrammeExporterFeuilleSeance').Add_Click({
     Invoke-Protege {
         if (-not $CmbProgrammeSelection.SelectedItem) { Show-Erreur "Selectionne un programme."; return }
-        if (-not (Show-DialogColonnesTracking)) { return }
+        if (-not (Show-DialogColonnesTracking -AvecSemainesSeance)) { return }
         $dialog = New-Object Microsoft.Win32.SaveFileDialog
         $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
         $dialog.FileName = "Feuille_de_seance.xlsx"
         if ($dialog.ShowDialog()) {
             Export-FeuilleSeanceExcel -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Path $dialog.FileName
-            Show-Info "Feuille de séance créée (même présentation que ton onglet TRAINING : programme à gauche, 12 blocs SEMAINE à droite ; un onglet par séance), avec un onglet TRACKING pour le suivi quotidien sur 52 semaines.`n`nEnvoie ce seul fichier à ton client : chaque semaine il note la DATE en haut d'un bloc puis ses répétitions et charges série par série, et chaque jour il remplit sa ligne dans TRACKING. Réimporte-le ensuite via Suivi (Séances réalisées ou Tracking quotidien, au choix) : les séances et le suivi quotidien sont rangés chacun à leur place."
+            Show-Info "Feuille de séance créée (même présentation que ton onglet TRAINING : programme à gauche, blocs SEMAINE à droite ; un onglet par séance), un onglet RECAP SERIES (séries par groupe musculaire) et un onglet TRACKING pour le suivi quotidien.`n`nEnvoie ce seul fichier à ton client : chaque semaine il note la DATE en haut d'un bloc puis ses répétitions et charges série par série, et chaque jour il remplit sa ligne dans TRACKING. Réimporte-le ensuite via Suivi (Séances réalisées ou Tracking quotidien, au choix) : les séances et le suivi quotidien sont rangés chacun à leur place."
         }
     }
 })
@@ -1412,9 +1494,17 @@ foreach ($chk in $ChkProgrammeTempo, $ChkProgrammeRir) { $chk.Add_Checked($enreg
     Invoke-Protege {
         if (-not $ListeSeances.SelectedItem) { Show-Erreur "Selectionne d'abord une seance."; return }
         if ($Script:SelectedSeanceExerciceId) {
-            Update-SeanceExercice -DbPath $DbPath -Id $Script:SelectedSeanceExerciceId `
+            $idModifie = [int]$Script:SelectedSeanceExerciceId
+            $exerciceId = if ($CmbExerciceAAjouter.SelectedItem) { [int]$CmbExerciceAAjouter.SelectedItem.id } else { 0 }
+            Update-SeanceExercice -DbPath $DbPath -Id $idModifie -ExerciceId $exerciceId `
                 -Series (Get-TexteOuNull $TxtExASeries.Text) -Repetitions (Get-TexteOuNull $TxtExARepetitions.Text) -Charge (Get-TexteOuNull $TxtExACharge.Text) `
                 -RecuperationS (Get-TexteOuNull $TxtExARecup.Text) -Tempo (Get-TexteOuNull $TxtExATempo.Text) -Rir (Get-TexteOuNull $TxtExARir.Text) -Variante (Get-TexteOuNull $TxtExAVariante.Text) -Notes (Get-TexteOuNull $TxtExANotes.Text)
+            Update-DetailSeriesDepuisFormulaire -Contexte 'Programme' -LigneId $idModifie -Avant $Script:LigneSeanceExerciceAvant `
+                -Series $TxtExASeries.Text -Repetitions $TxtExARepetitions.Text -Charge $TxtExACharge.Text -Recup $TxtExARecup.Text
+            Update-VueSeanceExercices
+            # La ligne reste selectionnee : le formulaire montre ce qui vient d'etre enregistre
+            $GridSeanceExercices.SelectedItem = $GridSeanceExercices.Items | Where-Object { [int]$_.id -eq $idModifie }
+            return
         } else {
             if (-not $CmbExerciceAAjouter.SelectedItem) { Show-Erreur "Selectionne un exercice dans la liste."; return }
             $nomExercice = [string]$CmbExerciceAAjouter.SelectedItem.affichage
@@ -1433,6 +1523,18 @@ foreach ($chk in $ChkProgrammeTempo, $ChkProgrammeRir) { $chk.Add_Checked($enreg
         Update-VueSeanceExercices
     }
 })
+
+function Move-ExerciceSeanceSelectionne {
+    param([int] $Direction)
+    $item = $GridSeanceExercices.SelectedItem
+    if (-not $item) { Show-Erreur "SÃ©lectionne un exercice dans le tableau."; return }
+    $id = [int]$item.id
+    Move-SeanceExercice -DbPath $DbPath -Id $id -Direction $Direction
+    Update-VueSeanceExercices
+    $GridSeanceExercices.SelectedItem = $GridSeanceExercices.Items | Where-Object { [int]$_.id -eq $id }
+}
+(Get-Ctrl 'BtnExerciceMonter').Add_Click({ Invoke-Protege { Move-ExerciceSeanceSelectionne -Direction -1 } })
+(Get-Ctrl 'BtnExerciceDescendre').Add_Click({ Invoke-Protege { Move-ExerciceSeanceSelectionne -Direction 1 } })
 
 (Get-Ctrl 'BtnExerciceSupprimerDeSeance').Add_Click({
     Invoke-Protege {

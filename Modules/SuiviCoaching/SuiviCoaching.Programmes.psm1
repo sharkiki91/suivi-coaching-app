@@ -163,6 +163,7 @@ function Update-SeanceExercice {
     param(
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $Id,
+        [int] $ExerciceId = 0,   # > 0 : remplace l'exercice de la ligne (choix dans la liste)
         [string] $Series,
         [string] $Repetitions,
         [string] $Charge,
@@ -173,9 +174,9 @@ function Update-SeanceExercice {
         [string] $Notes
     )
     Invoke-SqliteQuery -DataSource $DbPath -Query @"
-UPDATE seance_exercices SET series = @Series, repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS, tempo = @Tempo, rir = @Rir, variante = @Variante, notes = @Notes
+UPDATE seance_exercices SET exercice_id = CASE WHEN @ExerciceId > 0 THEN @ExerciceId ELSE exercice_id END, series = @Series, repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS, tempo = @Tempo, rir = @Rir, variante = @Variante, notes = @Notes
 WHERE id = @Id
-"@ -SqlParameters @{ Id = $Id; Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Rir = $Rir; Variante = $Variante; Notes = $Notes }
+"@ -SqlParameters @{ Id = $Id; ExerciceId = $ExerciceId; Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Rir = $Rir; Variante = $Variante; Notes = $Notes }
 }
 
 function Remove-SeanceExercice {
@@ -229,7 +230,85 @@ function Remove-SeanceExerciceSeriesTout {
     Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM seance_exercice_series WHERE seance_exercice_id = @Id" -SqlParameters @{ Id = $SeanceExerciceId }
 }
 
+# --- Partage entre exercices de seance (Programme) et exercices de modele (Modele) ---
+
+function Get-TablesExercice {
+    <# Noms de tables/colonnes selon le contexte (liste fermee : jamais de nom de table venant de l'exterieur dans le SQL). #>
+    param([Parameter(Mandatory)] [ValidateSet('Programme', 'Modele')] [string] $Contexte)
+    if ($Contexte -eq 'Programme') {
+        return @{ Lignes = 'seance_exercices'; Parent = 'seance_id'; Series = 'seance_exercice_series'; CleSerie = 'seance_exercice_id' }
+    }
+    return @{ Lignes = 'seance_modele_exercices'; Parent = 'seance_modele_id'; Series = 'seance_modele_exercice_series'; CleSerie = 'seance_modele_exercice_id' }
+}
+
+function Move-LigneExercice {
+    <#
+        Monte (Direction -1) ou descend (Direction 1) un exercice dans sa seance (ou son modele). Les
+        positions de toute la seance sont renumerotees 0, 1, 2... au passage (les anciens exercices
+        pouvaient avoir le meme numero d'ordre).
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [ValidateSet('Programme', 'Modele')] [string] $Contexte,
+        [Parameter(Mandatory)] [int] $Id,
+        [Parameter(Mandatory)] [ValidateSet(-1, 1)] [int] $Direction
+    )
+    $t = Get-TablesExercice -Contexte $Contexte
+    $parent = (Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT $($t.Parent) AS p FROM $($t.Lignes) WHERE id = @Id" -SqlParameters @{ Id = $Id }).p
+    if ($null -eq $parent) { return }
+    $ids = @(Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT id FROM $($t.Lignes) WHERE $($t.Parent) = @P ORDER BY ordre, id" -SqlParameters @{ P = $parent } | ForEach-Object { [int]$_.id })
+    $index = [array]::IndexOf($ids, $Id)
+    $cible = $index + $Direction
+    if ($index -lt 0 -or $cible -lt 0 -or $cible -ge $ids.Count) { return }
+    $ids[$index] = $ids[$cible]; $ids[$cible] = $Id
+    for ($i = 0; $i -lt $ids.Count; $i++) {
+        Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE $($t.Lignes) SET ordre = @Ordre WHERE id = @Id" -SqlParameters @{ Ordre = $i; Id = $ids[$i] }
+    }
+}
+
+function Update-SeriesDetailDepuisLigne {
+    <#
+        Apres une modification de la ligne d'un exercice qui a un detail par serie : les champs modifies
+        sur la ligne (-Champs, ex. @{ repetitions = '12' }) sont appliques a toutes les series du detail,
+        les autres champs gardent leur detail (une pyramide de charge reste intacte si seules les reps
+        changent). -NbSeries > 0 ajuste le nombre de series (ajout en recopiant la derniere, ou retrait
+        des dernieres). Sans detail par serie, rien a faire : la ligne fait deja foi.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [ValidateSet('Programme', 'Modele')] [string] $Contexte,
+        [Parameter(Mandatory)] [int] $LigneId,
+        [hashtable] $Champs = @{},
+        [int] $NbSeries = 0
+    )
+    $t = Get-TablesExercice -Contexte $Contexte
+    $series = @(Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT * FROM $($t.Series) WHERE $($t.CleSerie) = @Id ORDER BY numero_serie" -SqlParameters @{ Id = $LigneId })
+    if ($series.Count -eq 0) { return }
+    foreach ($champ in $Champs.Keys) {
+        if ($champ -notin @('repetitions', 'charge', 'recuperation_s')) { continue }
+        $valeur = if ([string]::IsNullOrWhiteSpace([string]$Champs[$champ])) { [DBNull]::Value } else { [string]$Champs[$champ] }
+        Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE $($t.Series) SET $champ = @V WHERE $($t.CleSerie) = @Id" -SqlParameters @{ V = $valeur; Id = $LigneId }
+    }
+    if ($NbSeries -gt 0 -and $NbSeries -ne $series.Count) {
+        if ($NbSeries -lt $series.Count) {
+            Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM $($t.Series) WHERE $($t.CleSerie) = @Id AND numero_serie > @N" -SqlParameters @{ Id = $LigneId; N = $NbSeries }
+        } else {
+            $derniere = Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT * FROM $($t.Series) WHERE $($t.CleSerie) = @Id ORDER BY numero_serie DESC LIMIT 1" -SqlParameters @{ Id = $LigneId }
+            for ($n = $series.Count + 1; $n -le $NbSeries; $n++) {
+                Invoke-SqliteQuery -DataSource $DbPath -Query "INSERT INTO $($t.Series) ($($t.CleSerie), numero_serie, repetitions, charge, recuperation_s) VALUES (@Id, @N, @R, @C, @Rec)" `
+                    -SqlParameters @{ Id = $LigneId; N = $n; R = $derniere.repetitions; C = $derniere.charge; Rec = $derniere.recuperation_s }
+            }
+        }
+    }
+}
+
+function Move-SeanceExercice {
+    param([Parameter(Mandatory)] [string] $DbPath, [Parameter(Mandatory)] [int] $Id, [Parameter(Mandatory)] [ValidateSet(-1, 1)] [int] $Direction)
+    Move-LigneExercice -DbPath $DbPath -Contexte 'Programme' -Id $Id -Direction $Direction
+}
+
 Export-ModuleMember -Function Get-Programmes, New-Programme, Remove-Programme, `
     Get-Seances, New-Seance, Remove-Seance, Move-Seance, Update-SeanceJour, `
     Get-SeanceExercices, New-SeanceExercice, Update-SeanceExercice, Remove-SeanceExercice, `
-    Get-SeanceExerciceSeries, New-SeanceExerciceSerie, Remove-SeanceExerciceSeriesTout
+    Get-SeanceExerciceSeries, New-SeanceExerciceSerie, Remove-SeanceExerciceSeriesTout, `
+    Move-LigneExercice, Update-SeriesDetailDepuisLigne, Move-SeanceExercice

@@ -93,6 +93,7 @@ function Update-SeanceModeleExercice {
     param(
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $Id,
+        [int] $ExerciceId = 0,   # > 0 : remplace l'exercice de la ligne (choix dans la liste)
         [string] $Series,
         [string] $Repetitions,
         [string] $Charge,
@@ -103,9 +104,9 @@ function Update-SeanceModeleExercice {
         [string] $Notes
     )
     Invoke-SqliteQuery -DataSource $DbPath -Query @"
-UPDATE seance_modele_exercices SET series = @Series, repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS, tempo = @Tempo, rir = @Rir, variante = @Variante, notes = @Notes
+UPDATE seance_modele_exercices SET exercice_id = CASE WHEN @ExerciceId > 0 THEN @ExerciceId ELSE exercice_id END, series = @Series, repetitions = @Repetitions, charge = @Charge, recuperation_s = @RecuperationS, tempo = @Tempo, rir = @Rir, variante = @Variante, notes = @Notes
 WHERE id = @Id
-"@ -SqlParameters @{ Id = $Id; Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Rir = $Rir; Variante = $Variante; Notes = $Notes }
+"@ -SqlParameters @{ Id = $Id; ExerciceId = $ExerciceId; Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Rir = $Rir; Variante = $Variante; Notes = $Notes }
 }
 
 function Remove-SeanceModeleExercice {
@@ -181,7 +182,12 @@ function New-SeanceDepuisModele {
     return $seanceId
 }
 
-Export-ModuleMember -Function Get-SeanceModeles, New-SeanceModele, Update-SeanceModele, Remove-SeanceModele, `
+function Move-SeanceModeleExercice {
+    param([Parameter(Mandatory)] [string] $DbPath, [Parameter(Mandatory)] [int] $Id, [Parameter(Mandatory)] [ValidateSet(-1, 1)] [int] $Direction)
+    Move-LigneExercice -DbPath $DbPath -Contexte 'Modele' -Id $Id -Direction $Direction
+}
+
+Export-ModuleMember -Function Get-SeanceModeles, New-SeanceModele, Update-SeanceModele, Remove-SeanceModele, Move-SeanceModeleExercice, `
     Get-SeanceModeleExercices, New-SeanceModeleExercice, Update-SeanceModeleExercice, Remove-SeanceModeleExercice, `
     Get-SeanceModeleExerciceSeries, New-SeanceModeleExerciceSerie, Remove-SeanceModeleExerciceSeriesTout, `
     New-SeanceDepuisModele

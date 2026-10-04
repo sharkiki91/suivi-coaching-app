@@ -1,7 +1,7 @@
 ﻿<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Name="FenetreDialogColonnesTracking"
-        Title="Colonnes du tracking quotidien" Width="560" SizeToContent="Height" MinWidth="460"
+        Title="Options de la feuille à envoyer" Width="560" SizeToContent="Height" MinWidth="460"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip" FontFamily="Segoe UI" FontSize="14">
     <Window.Resources>
@@ -19,7 +19,7 @@
         </Style>
     </Window.Resources>
     <StackPanel Margin="20">
-        <TextBlock Text="Colonnes du tracking quotidien" FontSize="18" FontWeight="Bold" Margin="0,0,0,6" />
+        <TextBlock Text="Options de la feuille à envoyer" FontSize="18" FontWeight="Bold" Margin="0,0,0,6" />
         <TextBlock TextWrapping="Wrap" Foreground="#555" Margin="0,0,0,10"
                    Text="Coche les colonnes à mettre dans l'onglet TRACKING envoyé au client. Ton choix est gardé pour les prochains exports." />
         <StackPanel x:Name="PanelDialogColonnes" />
@@ -28,6 +28,19 @@
                 <CheckBox x:Name="ChkDialogBilan" Content="Case BILAN de la semaine (une case par semaine, avec le lien du formulaire)" FontWeight="SemiBold" />
                 <TextBlock Text="Lien du formulaire de bilan :" Margin="0,6,0,0" />
                 <TextBox x:Name="TxtDialogLienBilan" />
+            </StackPanel>
+        </Border>
+        <Border BorderBrush="#DDD" BorderThickness="0,1,0,0" Margin="0,10,0,0" Padding="0,10,0,0">
+            <StackPanel>
+                <TextBlock Text="Nombre de semaines" FontWeight="SemiBold" />
+                <StackPanel x:Name="PanelDialogSemainesSeance" Orientation="Horizontal" Margin="0,6,0,0">
+                    <TextBlock Text="Tableau des séances (blocs SEMAINE) :" Width="300" VerticalAlignment="Center" />
+                    <TextBox x:Name="TxtDialogSemainesSeance" Width="60" HorizontalContentAlignment="Center" ToolTip="De 1 à 52 semaines" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <TextBlock Text="Tracking quotidien (onglet TRACKING) :" Width="300" VerticalAlignment="Center" />
+                    <TextBox x:Name="TxtDialogSemainesTracking" Width="60" HorizontalContentAlignment="Center" ToolTip="De 1 à 104 semaines" />
+                </StackPanel>
             </StackPanel>
         </Border>
         <StackPanel Orientation="Horizontal" Margin="0,20,0,0" HorizontalAlignment="Right">

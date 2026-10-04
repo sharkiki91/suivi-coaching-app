@@ -134,6 +134,10 @@ WHERE p.id = @Id
     .semaine th { background: $v; color: #fff; font-size: 11px; padding: 5px; border: 1px solid #fff; }
     .semaine td { text-align: center; font-weight: bold; color: $v; padding: 8px 4px; border: 1px solid $sep; font-size: 11px; }
     .semaine td.repos { color: #999; font-weight: normal; }
+    .recap td { padding: 4px; }
+    .recap .muscle { text-align: left; padding-left: 8px; }
+    .recap td.total { background: #F3F0FA; }
+    .recap th.total { background: $Script:CouleurLavande; }
     .bloc { display: flex; margin-bottom: 16px; border: 2px solid $v; break-inside: avoid; page-break-inside: avoid; }   /* une seance n'est jamais coupee entre deux pages */
     .bloc .bande { background: $lav; color: #fff; font-size: 17px; font-weight: bold; width: 46px; min-width: 46px; border-right: 2px solid $v; display: flex; align-items: center; justify-content: center; }
     .bloc .bande div { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; text-align: center; }
@@ -176,6 +180,22 @@ WHERE p.id = @Id
             else { [void]$sb.Append("<td class='repos'>Repos</td>") }
         }
         [void]$sb.Append("</tr></table>")
+    }
+
+    # Recap : series par groupe musculaire, par seance et sur la semaine (toutes les seances du programme)
+    $recap = Get-RecapSeriesMuscles -DbPath $DbPath -ProgrammeId $ProgrammeId
+    if ($recap.Lignes.Count -gt 0) {
+        [void]$sb.Append("<table class='semaine recap'><tr><th class='muscle'>S&Eacute;RIES PAR MUSCLE</th>")
+        foreach ($nom in $recap.Seances) { [void]$sb.Append("<th>$(HtmlEncode $nom.ToUpperInvariant())</th>") }
+        [void]$sb.Append("<th class='total'>TOTAL SEMAINE</th></tr>")
+        foreach ($ligne in $recap.Lignes) {
+            [void]$sb.Append("<tr><td class='muscle'>$(HtmlEncode $ligne.Muscle)</td>")
+            foreach ($n in $ligne.ParSeance) { if ($n -gt 0) { [void]$sb.Append("<td>$n</td>") } else { [void]$sb.Append("<td class='repos'>-</td>") } }
+            [void]$sb.Append("<td class='total'>$($ligne.Total)</td></tr>")
+        }
+        [void]$sb.Append("<tr><td class='muscle total'>TOTAL</td>")
+        foreach ($n in $recap.TotalParSeance) { [void]$sb.Append("<td class='total'>$n</td>") }
+        [void]$sb.Append("<td class='total'>$($recap.TotalSemaine)</td></tr></table>")
     }
 
     foreach ($s in $seances) {
@@ -305,6 +325,7 @@ function Get-ReglagesTracking {
         Colonnes = $cles
         AvecBilan = ((Get-Parametre -DbPath $DbPath -Cle 'tracking_avec_bilan' -Defaut '1') -eq '1')
         LienBilan = [string](Get-Parametre -DbPath $DbPath -Cle 'tracking_lien_bilan' -Defaut $Script:LienBilanParDefaut)
+        NbSemaines = [int](Get-Parametre -DbPath $DbPath -Cle 'tracking_nb_semaines' -Defaut ([string]$Script:NbSemainesTracking))
     }
 }
 
@@ -314,6 +335,7 @@ function Get-ReglagesProgramme {
     [pscustomobject]@{
         AvecTempo = ((Get-Parametre -DbPath $DbPath -Cle 'programme_avec_tempo' -Defaut '1') -eq '1')
         AvecRir = ((Get-Parametre -DbPath $DbPath -Cle 'programme_avec_rir' -Defaut '1') -eq '1')
+        NbSemainesSeance = [int](Get-Parametre -DbPath $DbPath -Cle 'feuille_nb_semaines' -Defaut ([string]$Script:NbBlocsSuivi))
     }
 }
 
@@ -324,7 +346,9 @@ function Set-ReglagesProgramme {
 }
 
 function Set-ReglagesTracking {
-    param([Parameter(Mandatory)] [string] $DbPath, [string[]] $Colonnes, [bool] $AvecBilan, [string] $LienBilan)
+    param([Parameter(Mandatory)] [string] $DbPath, [string[]] $Colonnes, [bool] $AvecBilan, [string] $LienBilan, [int] $NbSemaines = 0, [int] $NbSemainesSeance = 0)
+    if ($NbSemaines -gt 0) { Set-Parametre -DbPath $DbPath -Cle 'tracking_nb_semaines' -Valeur ([string]$NbSemaines) }
+    if ($NbSemainesSeance -gt 0) { Set-Parametre -DbPath $DbPath -Cle 'feuille_nb_semaines' -Valeur ([string]$NbSemainesSeance) }
     Set-Parametre -DbPath $DbPath -Cle 'tracking_colonnes' -Valeur (@($Colonnes) -join ',')
     Set-Parametre -DbPath $DbPath -Cle 'tracking_avec_bilan' -Valeur ([string][int]$AvecBilan)
     Set-Parametre -DbPath $DbPath -Cle 'tracking_lien_bilan' -Valeur ([string]$LienBilan).Trim()
@@ -420,6 +444,77 @@ function Set-LargeursSansRetourExcel {
         if ($Ws.Column($c).Width -lt $besoin[$c]) { $Ws.Column($c).Width = [math]::Round($besoin[$c], 1) }
     }
     foreach ($f in $polices.Values) { $f.Dispose() }
+}
+
+function Get-RecapSeriesMuscles {
+    <#
+        Nombre de series par groupe musculaire (champ "muscle cible" de l'exercice dans la bibliotheque),
+        pour chaque seance du programme et sur la semaine (= toutes les seances du programme, chacune une
+        fois). Series d'un exercice = detail par serie s'il existe, sinon le haut de la fourchette ("3-4" -> 4).
+        Lignes triees du muscle le plus travaille au moins travaille.
+    #>
+    param([Parameter(Mandatory)] [string] $DbPath, [Parameter(Mandatory)] [int] $ProgrammeId)
+    $seances = @(Get-Seances -DbPath $DbPath -ProgrammeId $ProgrammeId)
+    $parMuscle = [ordered]@{}
+    for ($i = 0; $i -lt $seances.Count; $i++) {
+        foreach ($e in @(Get-SeanceExercices -DbPath $DbPath -SeanceId ([int]$seances[$i].id))) {
+            $detail = @(Get-SeanceExerciceSeries -DbPath $DbPath -SeanceExerciceId ([int]$e.id))
+            $muscle = ([string]$e.muscle_cible).Trim().ToUpperInvariant()
+            if (-not $muscle) { $muscle = 'NON PRECISE' }
+            if (-not $parMuscle.Contains($muscle)) { $parMuscle[$muscle] = New-Object int[] ($seances.Count) }
+            $parMuscle[$muscle][$i] += Get-NombreSeriesExport -SeriesDetail $detail -SeriesGlobal ([string]$e.series)
+        }
+    }
+    $lignes = @(foreach ($m in $parMuscle.Keys) {
+        [pscustomobject]@{ Muscle = $m; ParSeance = @($parMuscle[$m]); Total = ($parMuscle[$m] | Measure-Object -Sum).Sum }
+    }) | Sort-Object -Property @{ Expression = 'Total'; Descending = $true }, @{ Expression = 'Muscle'; Descending = $false }
+    $totaux = @(for ($i = 0; $i -lt $seances.Count; $i++) { ($parMuscle.Values | ForEach-Object { $_[$i] } | Measure-Object -Sum).Sum })
+    [pscustomobject]@{
+        Seances = @($seances | ForEach-Object { [string]$_.nom })
+        Lignes = @($lignes)
+        TotalParSeance = @($totaux | ForEach-Object { [int]$_ })
+        TotalSemaine = [int](($totaux | Measure-Object -Sum).Sum)
+    }
+}
+
+function Add-OngletRecapSeriesExcel {
+    <# Onglet "RECAP SERIES" : series par groupe musculaire, une colonne par seance + TOTAL SEMAINE (meme charte que les autres onglets). #>
+    param([Parameter(Mandatory)] $Pkg, [Parameter(Mandatory)] $Recap, [string] $Titre)
+    if ($Recap.Lignes.Count -eq 0) { return }
+    $ws = Add-Worksheet -ExcelPackage $Pkg -WorksheetName 'RECAP SERIES'
+    $ws.View.ShowGridLines = $false
+    $ws.Column(1).Width = 2
+    $cMuscle = 2; $cPremiere = 3; $cTotal = $cPremiere + $Recap.Seances.Count
+    $ws.Column($cMuscle).Width = 18
+    for ($c = $cPremiere; $c -le $cTotal; $c++) { $ws.Column($c).Width = 12 }
+    Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 1 -C1 $cMuscle -L2 1 -C2 $cTotal -Valeur $Titre) -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Taille 12 -Gras
+    $ws.Row(1).Height = 24
+    Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 2 -C1 $cMuscle -L2 2 -C2 $cTotal -Valeur 'Nombre de series par groupe musculaire, par seance et sur la semaine (toutes les seances du programme).') -Couleur $Script:CouleurViolet -Italique -Gauche
+    $l = 4
+    $ws.Cells[$l, $cMuscle].Value = 'SERIES PAR MUSCLE'
+    for ($i = 0; $i -lt $Recap.Seances.Count; $i++) { $ws.Cells[$l, ($cPremiere + $i)].Value = $Recap.Seances[$i].ToUpperInvariant() }
+    $ws.Cells[$l, $cTotal].Value = 'TOTAL SEMAINE'
+    Set-StyleExcel -Plage $ws.Cells[$l, $cMuscle, $l, $cTotal] -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras
+    Set-StyleExcel -Plage $ws.Cells[$l, $cTotal] -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras
+    foreach ($ligne in $Recap.Lignes) {
+        $l++
+        $ws.Cells[$l, $cMuscle].Value = $ligne.Muscle
+        for ($i = 0; $i -lt $ligne.ParSeance.Count; $i++) { if ($ligne.ParSeance[$i] -gt 0) { $ws.Cells[$l, ($cPremiere + $i)].Value = [int]$ligne.ParSeance[$i] } }
+        $ws.Cells[$l, $cTotal].Value = [int]$ligne.Total
+    }
+    $l++
+    $ws.Cells[$l, $cMuscle].Value = 'TOTAL'
+    for ($i = 0; $i -lt $Recap.TotalParSeance.Count; $i++) { $ws.Cells[$l, ($cPremiere + $i)].Value = [int]$Recap.TotalParSeance[$i] }
+    $ws.Cells[$l, $cTotal].Value = [int]$Recap.TotalSemaine
+    Set-StyleExcel -Plage $ws.Cells[5, $cMuscle, $l, $cMuscle] -Couleur $Script:CouleurViolet -Gras -Gauche
+    Set-StyleExcel -Plage $ws.Cells[5, $cPremiere, ($l - 1), ($cTotal - 1)] -Couleur '#000000' -Taille 10
+    Set-StyleExcel -Plage $ws.Cells[5, $cTotal, $l, $cTotal] -Fond '#F3F0FA' -Couleur '#000000' -Gras -Taille 10
+    Set-StyleExcel -Plage $ws.Cells[$l, $cMuscle, $l, ($cTotal - 1)] -Fond '#F3F0FA' -Couleur $Script:CouleurViolet -Gras -Taille 10
+    Set-BordureExcel -Plage $ws.Cells[5, $cMuscle, $l, $cTotal] -Cotes @('Bottom') -Couleur $Script:CouleurLigneSerie -Epaisseur 'Thin'
+    Set-BordureExcel -Plage $ws.Cells[$l, $cMuscle, $l, $cTotal] -Cotes @('Top') -Couleur $Script:CouleurViolet
+    Set-LargeursSansRetourExcel -Ws $ws
+    $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
+    $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 1
 }
 
 function Get-LignesSeriesExercice {
@@ -649,7 +744,7 @@ function Export-FeuilleSeanceExcel {
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $ProgrammeId,
         [Parameter(Mandatory)] [string] $Path,
-        [int] $NbBlocs = $Script:NbBlocsSuivi,
+        [int] $NbBlocs = -1,   # -1 : nombre de semaines choisi par le coach (12 par defaut)
         [string] $TexteConsigne
     )
 
@@ -661,6 +756,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
 
     # Colonnes : A repere masque | B bande seance | programme (TEMPO et RIR selon le choix du coach) | espace | puis les blocs SEMAINE (4 colonnes + 1 espace)
     $reglagesProgramme = Get-ReglagesProgramme -DbPath $DbPath
+    if ($NbBlocs -lt 0) { $NbBlocs = $reglagesProgramme.NbSemainesSeance }   # nombre de semaines choisi par le coach
     $colonnesProgramme = [ordered]@{ '#' = 4; 'EXERCICE' = 24; 'VARIANTE' = 11; 'SET' = 4.5; 'REPS' = 7; 'CHARGE' = 10; 'RECUP (s)' = 8; 'TEMPO' = 7; 'RIR' = 5; 'MUSCLE CIBLE' = 12; 'LIEN' = 7 }
     if (-not $reglagesProgramme.AvecTempo) { $colonnesProgramme.Remove('TEMPO') }
     if (-not $reglagesProgramme.AvecRir) { $colonnesProgramme.Remove('RIR') }
@@ -676,6 +772,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
         $consigne = if ($NbBlocs -gt 0) { "Chaque semaine : note la DATE de ta seance en haut du bloc SEMAINE, puis tes repetitions et la charge serie par serie (et une note si besoin). Semaine suivante = bloc suivant. Ton suivi quotidien se remplit dans l'onglet TRACKING." } else { $TexteConsigne }
         $nomsOnglets = @{}
         if ($NbBlocs -gt 0) { $nomsOnglets['TRACKING'] = $true }   # nom reserve a l'onglet de suivi quotidien
+        $nomsOnglets['RECAP SERIES'] = $true   # nom reserve a l'onglet recap des series
 
         # Un onglet par seance : chaque tableau s'imprime en entier sur une seule page, sans etre coupe en deux.
         foreach ($s in $seances) {
@@ -829,12 +926,16 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
             $ws.PrinterSettings.TopMargin = 0.4; $ws.PrinterSettings.BottomMargin = 0.4; $ws.PrinterSettings.LeftMargin = 0.3; $ws.PrinterSettings.RightMargin = 0.3
         }
 
+        # Recap des series par groupe musculaire (par seance + semaine)
+        $recap = Get-RecapSeriesMuscles -DbPath $DbPath -ProgrammeId $ProgrammeId
+        Add-OngletRecapSeriesExcel -Pkg $pkg -Recap $recap -Titre "SERIES PAR GROUPE MUSCULAIRE - $($prog.nom)".ToUpperInvariant()
+
         if ($NbBlocs -gt 0) {
             # Suivi quotidien dans le meme fichier, a partir du debut du programme (sinon du lundi de cette semaine)
             $debut = if ($prog.date_debut) { ([datetime]$prog.date_debut).Date } else { Get-LundiCetteSemaine }
             $reglages = Get-ReglagesTracking -DbPath $DbPath
             Add-OngletTrackingExcel -Pkg $pkg -DateDebut $debut -Titre "SUIVI QUOTIDIEN - $($prog.client_prenom) $($prog.client_nom)".ToUpperInvariant() `
-                -Colonnes $reglages.Colonnes -AvecBilan $reglages.AvecBilan -LienBilan $reglages.LienBilan
+                -Colonnes $reglages.Colonnes -AvecBilan $reglages.AvecBilan -LienBilan $reglages.LienBilan -NbSemaines $reglages.NbSemaines
         }
 
         # Un classeur Excel doit contenir au moins un onglet
@@ -1104,4 +1205,4 @@ FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
 Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, `
     Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries, `
     Add-OngletTrackingExcel, Get-LundiCetteSemaine, Get-CatalogueTracking, Get-ReglagesTracking, Set-ReglagesTracking, `
-    Get-ReglagesProgramme, Set-ReglagesProgramme
+    Get-ReglagesProgramme, Set-ReglagesProgramme, Get-RecapSeriesMuscles, Get-NombreSeriesExport

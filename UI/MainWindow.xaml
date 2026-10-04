@@ -592,6 +592,8 @@
                                             <Button x:Name="BtnModeleExerciceAjouter" Grid.Row="1" Grid.Column="10" Content="Enregistrer" Background="#27AE60" Foreground="White" />
                                         </Grid>
                                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <Button x:Name="BtnModeleExerciceMonter" Content="▲" MinWidth="36" ToolTip="Monter l'exercice sélectionné" />
+                                            <Button x:Name="BtnModeleExerciceDescendre" Content="▼" MinWidth="36" ToolTip="Descendre l'exercice sélectionné" />
                                             <Button x:Name="BtnModeleExerciceSupprimer" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" />
                                             <CheckBox x:Name="ChkModExADetailSeries" Content="Détail par série (répétitions/charge/récup différents à chaque série)" VerticalAlignment="Center" Margin="12,0,0,0" />
                                         </StackPanel>
@@ -666,6 +668,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <DataGrid x:Name="GridSeanceExercices" Grid.Row="0" Margin="0,0,0,12">
@@ -727,9 +730,17 @@
                                     <Button x:Name="BtnExerciceAjouter" Grid.Row="1" Grid.Column="10" Content="Enregistrer" Background="#27AE60" Foreground="White" />
                                 </Grid>
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button x:Name="BtnExerciceMonter" Content="▲" MinWidth="36" ToolTip="Monter l'exercice sélectionné" />
+                                    <Button x:Name="BtnExerciceDescendre" Content="▼" MinWidth="36" ToolTip="Descendre l'exercice sélectionné" />
                                     <Button x:Name="BtnExerciceSupprimerDeSeance" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" />
                                     <CheckBox x:Name="ChkExADetailSeries" Content="Détail par série (répétitions/charge/récup différents à chaque série)" VerticalAlignment="Center" Margin="12,0,0,0" />
                                 </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1" Padding="12" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Séries par groupe musculaire (par séance, et sur la semaine = toutes les séances du programme)" FontWeight="Bold" Margin="0,0,0,6" />
+                                <DataGrid x:Name="GridRecapSeries" AutoGenerateColumns="True" MaxHeight="170" />
                             </StackPanel>
                         </Border>
                     </Grid>

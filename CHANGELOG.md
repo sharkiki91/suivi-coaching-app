@@ -6,6 +6,20 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.24.0] - 2026-10-04
+
+### Ajouté
+- **Nombre de semaines réglable** : la fenêtre d'options qui s'ouvre avant l'export (feuille de séance, modèle de tracking) permet de choisir le nombre de blocs SEMAINE du tableau des séances (1 à 52, 12 par défaut) et le nombre de semaines de l'onglet TRACKING (1 à 104, 52 par défaut). Le choix est mémorisé. L'impression, les couleurs des REPS et le réimport s'adaptent.
+- **Réordonner les exercices d'une séance** : flèches ▲▼ sous le formulaire (écran Programmes et modèles de séance) pour monter ou descendre l'exercice sélectionné. Un exercice oublié peut ainsi être ajouté en dernier puis remis à sa place sans tout recréer. L'ordre est repris dans le PDF, l'Excel et la feuille de séance.
+- **Récap des séries par groupe musculaire** (selon le muscle ciblé de chaque exercice de la bibliothèque), par séance et sur la semaine (toutes les séances du programme, chacune une fois). Une fourchette « 3-4 » compte pour 4, et le détail par série compte série par série. Le récap apparaît :
+  - dans l'écran Programmes, sous le formulaire, mis à jour à chaque modification ;
+  - dans le PDF du programme, sous la « Semaine type » ;
+  - dans un onglet **RECAP SERIES** de l'Excel du programme et de la feuille de séance.
+
+### Corrigé
+- **Modifier un exercice déjà créé n'avait pas d'effet visible** quand il avait un détail par série : les reps, la charge ou la récup modifiées sur la ligne étaient enregistrées, mais le détail par série (ce qui s'affiche et s'exporte) gardait les anciennes valeurs. Les champs modifiés sont maintenant appliqués à toutes les séries du détail (les champs non modifiés gardent leur détail, ex. une pyramide de charge), et un nouveau nombre de séries ajoute ou retire des séries. La ligne reste sélectionnée après « Enregistrer », pour voir tout de suite ce qui a été enregistré.
+- Changer l'exercice d'une ligne existante dans la liste déroulante n'était pas enregistré : c'est corrigé (programmes et modèles).
+
 ## [1.23.0] - 2026-10-02
 
 ### Ajouté

@@ -314,7 +314,7 @@ function Export-ModeleTrackingExcel {
     $pkg = Open-ExcelPackage -Path $Path -Create
     try {
         if ($reglages) {
-            Add-OngletTrackingExcel -Pkg $pkg -DateDebut $DateDebut.Date -Colonnes $reglages.Colonnes -AvecBilan $reglages.AvecBilan -LienBilan $reglages.LienBilan
+            Add-OngletTrackingExcel -Pkg $pkg -DateDebut $DateDebut.Date -Colonnes $reglages.Colonnes -AvecBilan $reglages.AvecBilan -LienBilan $reglages.LienBilan -NbSemaines $reglages.NbSemaines
         } else {
             Add-OngletTrackingExcel -Pkg $pkg -DateDebut $DateDebut.Date
         }
