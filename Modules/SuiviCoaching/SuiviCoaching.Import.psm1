@@ -452,30 +452,48 @@ function Test-OngletAvecRepere {
     return $false
 }
 
-function Export-ModeleRoadmapExcel {
-    <# Genere un fichier Excel vierge (avec une ligne d'exemple) au format impose pour la roadmap hebdo du client. #>
-    param([Parameter(Mandatory)] [string] $Path)
-
-    $exemple = [pscustomobject]@{
-        'Semaine' = 1
-        'Date debut' = '01/09/2026'
-        'Phase' = 'DEFICIT'
-        'Nutrition' = '2500 KCAL'
-        'Poids moyen (kg)' = 84.5
-        'Depense calorique' = $null
-        'Cardio (min)' = 20
-        'Pas' = 20000
-        'Precision training' = 'Pas de muscu les jours de rugby'
-        'Evenements' = $null
-        'Notes' = 'Exemple de ligne a remplacer - une ligne par semaine'
+function Get-LignesRoadmapFormatCoach {
+    <#
+        Lit un onglet ROADMAP au format du coach (modele de l'application, ou son fichier d'origine) :
+        en-tete "SEM" en B3, une semaine par ligne a partir de la ligne 5. Les colonnes sont reconnues par
+        leur titre (lignes 3-4) car certains fichiers clients n'ont pas toutes les colonnes (ex. sans POIDS
+        MOYEN / CARDIO / PAS). Retourne $null si le fichier n'a pas ce format. Chaque ligne = hashtable
+        cle roadmap_semaines -> valeur brute de la cellule (seulement les colonnes presentes).
+    #>
+    param([Parameter(Mandatory)] [string] $ExcelPath)
+    $pkg = Open-ExcelPackage -Path $ExcelPath
+    try {
+        $ws = $null
+        foreach ($w in $pkg.Workbook.Worksheets) {
+            if ($w.Dimension -and ([string]$w.Cells[3, 2].Value).Trim() -eq 'SEM') { $ws = $w; break }
+        }
+        if (-not $ws) { return $null }
+        $positions = @{}   # cle -> numero de colonne
+        foreach ($c in @(Get-ColonnesRoadmap)) {
+            for ($col = 2; $col -le $ws.Dimension.End.Column; $col++) {
+                $titres = @(([string]$ws.Cells[3, $col].Text).Trim().ToUpperInvariant(), ([string]$ws.Cells[4, $col].Text).Trim().ToUpperInvariant())
+                if ($titres -contains $c.Titre) { $positions[$c.Cle] = $col; break }
+            }
+        }
+        $lignes = New-Object System.Collections.ArrayList
+        for ($r = 5; $r -le $ws.Dimension.End.Row; $r++) {
+            $valeurs = @{}
+            foreach ($cle in $positions.Keys) { $valeurs[$cle] = $ws.Cells[$r, $positions[$cle]].Value }
+            $lignes.Add($valeurs) | Out-Null
+        }
+        return , $lignes
+    } finally {
+        Close-ExcelPackage $pkg -NoSave
     }
-    if (Test-Path $Path) { Remove-Item $Path -Force }
-    $exemple | Export-Excel -Path $Path -WorksheetName 'Roadmap' -AutoSize -TableStyle Medium2 -FreezeTopRow
 }
 
 function Import-RoadmapDepuisExcel {
-    <# Importe la roadmap hebdo d'un client depuis un fichier au format du modele (Export-ModeleRoadmapExcel).
-       Une semaine deja presente (meme numero) pour ce client est mise a jour plutot que dupliquee. #>
+    <#
+        Importe la roadmap hebdo d'un client : modele au format ROADMAP du coach (Export-ModeleRoadmapExcel),
+        ou ancien modele "une colonne par champ" (en-tete Semaine). Une semaine deja presente (meme numero)
+        est mise a jour plutot que dupliquee ; une semaine nouvelle sans aucune information (juste le numero
+        et la date pre-remplis par le modele) est ignoree.
+    #>
     param(
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $ClientId,
@@ -483,35 +501,58 @@ function Import-RoadmapDepuisExcel {
     )
 
     $resultat = [ordered]@{ Importees = 0; IgnoreesSansNumero = 0; Erreurs = New-Object System.Collections.Generic.List[string] }
-    $lignes = @(Import-Excel -Path $ExcelPath)
-    Test-ColonnesRequises -Lignes $lignes -Colonnes @('Semaine') -DescriptionFichier 'une roadmap (modele a telecharger depuis l''application)'
-
     $existantes = @{}
     foreach ($s in @(Get-RoadmapSemaines -DbPath $DbPath -ClientId $ClientId)) { $existantes[[int]$s.semaine_numero] = $s }
 
-    foreach ($ligne in $lignes) {
-        $v = { param([string]$Nom) Get-ValeurColonne $ligne $Nom }
-        if ([string](& $v 'Notes') -like 'Exemple de ligne a remplacer*') { continue }
-        $numeroDouble = ConvertTo-DoubleTolerant (& $v 'Semaine')
-        if ($null -eq $numeroDouble) { $resultat.IgnoreesSansNumero++; continue }
+    $formatCoach = Get-LignesRoadmapFormatCoach -ExcelPath $ExcelPath
+    if ($null -ne $formatCoach) {
+        $lignes = @($formatCoach)
+    } else {
+        $brutes = @(Import-Excel -Path $ExcelPath)
+        Test-ColonnesRequises -Lignes $brutes -Colonnes @('Semaine') -DescriptionFichier 'une roadmap (modele a telecharger depuis l''application)'
+        $lignes = foreach ($ligne in $brutes) {
+            $v = { param([string]$Nom) Get-ValeurColonne $ligne $Nom }
+            if ([string](& $v 'Notes') -like 'Exemple de ligne a remplacer*') { continue }
+            @{
+                semaine_numero = (& $v 'Semaine'); date_debut = (& $v 'Date debut'); phase = (& $v 'Phase'); nutrition = (& $v 'Nutrition')
+                poids_moyen = (& $v 'Poids moyen (kg)'); depense_calorique = (& $v 'Depense calorique'); cardio_minutes = (& $v 'Cardio (min)')
+                pas = (& $v 'Pas'); precision_training = (& $v 'Precision training'); evenements = (& $v 'Evenements'); notes = (& $v 'Notes')
+            }
+        }
+    }
+
+    foreach ($l in @($lignes)) {
+        $numeroDouble = ConvertTo-DoubleTolerant $l['semaine_numero']
+        if ($null -eq $numeroDouble) {
+            $remplie = @($l.Keys | Where-Object { $_ -ne 'semaine_numero' -and -not [string]::IsNullOrWhiteSpace([string]$l[$_]) }).Count -gt 0
+            if ($remplie) { $resultat.IgnoreesSansNumero++ }
+            continue
+        }
         $numero = [int]$numeroDouble
+        # Ligne sans aucune information (juste le numero et la date du modele) : ignoree, elle n'efface rien
+        $remplie = @($l.Keys | Where-Object { $_ -notin @('semaine_numero', 'date_debut') -and -not [string]::IsNullOrWhiteSpace([string]$l[$_]) }).Count -gt 0
+        if (-not $remplie) { continue }
+        $existante = if ($existantes.ContainsKey($numero)) { $existantes[$numero] } else { $null }
+        # Colonne absente du fichier (ex. "depense calorique", ou fichier client sans POIDS MOYEN) : on garde la valeur de l'appli
+        $val = { param([string]$Cle) if ($l.ContainsKey($Cle)) { $l[$Cle] } elseif ($existante) { $existante.$Cle } else { $null } }
         try {
             $champs = @{
                 DbPath = $DbPath
                 SemaineNumero = $numero
-                DateDebut = (ConvertTo-DateIso (& $v 'Date debut'))
-                Phase = (Get-TexteImportOuNull (& $v 'Phase'))
-                Nutrition = (Get-TexteImportOuNull (& $v 'Nutrition'))
-                PoidsMoyen = (ConvertTo-DoubleTolerant (& $v 'Poids moyen (kg)'))
-                DepenseCalorique = (ConvertTo-DoubleTolerant (& $v 'Depense calorique'))
-                CardioMinutes = (ConvertTo-DoubleTolerant (& $v 'Cardio (min)'))
-                Pas = (ConvertTo-DoubleTolerant (& $v 'Pas'))
-                PrecisionTraining = (Get-TexteImportOuNull (& $v 'Precision training'))
-                Evenements = (Get-TexteImportOuNull (& $v 'Evenements'))
-                Notes = (Get-TexteImportOuNull (& $v 'Notes'))
+                DateDebut = (ConvertTo-DateIso (& $val 'date_debut'))
+                Phase = (Get-TexteImportOuNull (& $val 'phase'))
+                Nutrition = (Get-TexteImportOuNull (& $val 'nutrition'))
+                PoidsMoyen = (ConvertTo-DoubleTolerant (& $val 'poids_moyen'))
+                DepenseCalorique = (ConvertTo-DoubleTolerant (& $val 'depense_calorique'))
+                CardioMinutes = (ConvertTo-DoubleTolerant (& $val 'cardio_minutes'))
+                Pas = (ConvertTo-DoubleTolerant (& $val 'pas'))
+                PrecisionDepense = (Get-TexteImportOuNull (& $val 'precision_depense'))
+                PrecisionTraining = (Get-TexteImportOuNull (& $val 'precision_training'))
+                Evenements = (Get-TexteImportOuNull (& $val 'evenements'))
+                Notes = (Get-TexteImportOuNull (& $val 'notes'))
             }
-            if ($existantes.ContainsKey($numero)) {
-                Update-RoadmapSemaine -Id ([int]$existantes[$numero].id) @champs
+            if ($existante) {
+                Update-RoadmapSemaine -Id ([int]$existante.id) @champs
             } else {
                 New-RoadmapSemaine -ClientId $ClientId @champs | Out-Null
             }
@@ -801,5 +842,5 @@ function Import-FichierSuiviClient {
 
 Export-ModuleMember -Function Import-BibliothequesDepuisExcel, Export-DonneesVersExcel, Get-EnTetesExcel, `
     Import-QuestionnaireDepuisExcel, Export-ModeleTrackingExcel, Import-TrackingDepuisExcel, `
-    Export-ModeleRoadmapExcel, Import-RoadmapDepuisExcel, Import-JournalAlimentaireDepuisFatSecret, `
+    Import-RoadmapDepuisExcel, Import-JournalAlimentaireDepuisFatSecret, `
     Import-SeanceRealiseeDepuisExcel, Import-FichierSuiviClient

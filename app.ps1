@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.24.0'
+$AppVersion = '1.25.0'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -116,6 +116,7 @@ if ($estPremierLancement) {
         }
     }
 }
+try { Initialize-EquivalencesParDefaut -DbPath $DbPath } catch { }   # non bloquant : le tableau reste simplement vide
 
 function Import-XamlWindow {
     <# Charge une fenetre XAML en forcant l'UTF-8, quel que soit le BOM du fichier. #>
@@ -215,7 +216,7 @@ function Show-DialogColonnesTracking {
         $lien = $txtLien.Text.Trim()
         if ($lien -and -not ($lien -match '^https?://')) { Show-Erreur "Le lien du bilan doit commencer par http:// ou https://"; return }
         $nbSeance = 0; $nbTracking = 0
-        if ($AvecSemainesSeance -and -not ([int]::TryParse($txtSemSeance.Text.Trim(), [ref]$nbSeance) -and $nbSeance -ge 1 -and $nbSeance -le 52)) { Show-Erreur "Nombre de semaines du tableau des sÃ©ances : mets un nombre entre 1 et 52."; return }
+        if ($AvecSemainesSeance -and -not ([int]::TryParse($txtSemSeance.Text.Trim(), [ref]$nbSeance) -and $nbSeance -ge 1 -and $nbSeance -le 52)) { Show-Erreur "Nombre de semaines du tableau des séances : mets un nombre entre 1 et 52."; return }
         if (-not ([int]::TryParse($txtSemTracking.Text.Trim(), [ref]$nbTracking) -and $nbTracking -ge 1 -and $nbTracking -le 104)) { Show-Erreur "Nombre de semaines du tracking : mets un nombre entre 1 et 104."; return }
         Set-ReglagesTracking -DbPath $DbPath -Colonnes $cles -AvecBilan ([bool]$chkBilan.IsChecked) -LienBilan $lien -NbSemaines $nbTracking -NbSemainesSeance $nbSeance
         $dlg.DialogResult = $true
@@ -759,6 +760,8 @@ function Update-VueBibliotheques {
     Update-VueAliments
     Update-VueComplements
     Update-VueModeles
+    Update-VueRecettes
+    Update-VueEquivalences
 }
 
 # --- Exercices ---
@@ -1103,6 +1106,8 @@ function Update-VueModeleExercices {
         $e | Add-Member -NotePropertyName 'charge_affichage' -NotePropertyValue (Get-ValeurAvecDetailSeries -SeriesDetail $detail -ValeurGlobale $e.charge -NomChamp 'charge')
         $e | Add-Member -NotePropertyName 'recuperation_affichage' -NotePropertyValue (Get-ValeurAvecDetailSeries -SeriesDetail $detail -ValeurGlobale $e.recuperation_s -NomChamp 'recuperation_s')
     }
+    $numeros = @(Get-NumerosExercices -Exercices $exercices)
+    for ($i = 0; $i -lt $exercices.Count; $i++) { $exercices[$i] | Add-Member -NotePropertyName 'numero_affichage' -NotePropertyValue $numeros[$i].Numero -Force }
     $GridModeleExercices.ItemsSource = $exercices
 }
 $ListeModeles.Add_SelectionChanged({
@@ -1157,7 +1162,7 @@ $GridModeleExercices.Add_SelectionChanged({
 function Move-ExerciceModeleSelectionne {
     param([int] $Direction)
     $item = $GridModeleExercices.SelectedItem
-    if (-not $item) { Show-Erreur "SÃ©lectionne un exercice dans le tableau."; return }
+    if (-not $item) { Show-Erreur "Sélectionne un exercice dans le tableau."; return }
     $id = [int]$item.id
     Move-SeanceModeleExercice -DbPath $DbPath -Id $id -Direction $Direction
     Update-VueModeleExercices
@@ -1165,6 +1170,16 @@ function Move-ExerciceModeleSelectionne {
 }
 (Get-Ctrl 'BtnModeleExerciceMonter').Add_Click({ Invoke-Protege { Move-ExerciceModeleSelectionne -Direction -1 } })
 (Get-Ctrl 'BtnModeleExerciceDescendre').Add_Click({ Invoke-Protege { Move-ExerciceModeleSelectionne -Direction 1 } })
+(Get-Ctrl 'BtnModeleExerciceSuperset').Add_Click({
+    Invoke-Protege {
+        $item = $GridModeleExercices.SelectedItem
+        if (-not $item) { Show-Erreur "Sélectionne le premier exercice du superset dans le tableau."; return }
+        $id = [int]$item.id
+        Switch-SupersetExercice -DbPath $DbPath -Contexte 'Modele' -Id $id
+        Update-VueModeleExercices
+        $GridModeleExercices.SelectedItem = $GridModeleExercices.Items | Where-Object { [int]$_.id -eq $id }
+    }
+})
 
 (Get-Ctrl 'BtnModeleExerciceAjouter').Add_Click({
     Invoke-Protege {
@@ -1220,6 +1235,225 @@ $ChkModExADetailSeries.Add_Click({
             -SeriesDefaut $TxtModExASeries.Text -RepetitionsDefaut $TxtModExARepetitions.Text -ChargeDefaut $TxtModExACharge.Text -RecupDefaut $TxtModExARecup.Text | Out-Null
         Update-VueModeleExercices
         $GridModeleExercices.SelectedItem = $GridModeleExercices.Items | Where-Object { [int]$_.id -eq $idExercice }
+    }
+})
+
+
+# --- Recettes ---
+$ListeRecettes = Get-Ctrl 'ListeRecettes'
+$TxtRecetteNom = Get-Ctrl 'TxtRecetteNom'
+$TxtRecetteNotes = Get-Ctrl 'TxtRecetteNotes'
+$GridRecetteIngredients = Get-Ctrl 'GridRecetteIngredients'
+$TxtTotauxRecette = Get-Ctrl 'TxtTotauxRecette'
+$CmbRecetteAliment = Get-Ctrl 'CmbRecetteAliment'
+$TxtRecetteQuantite = Get-Ctrl 'TxtRecetteQuantite'
+$Script:SelectedRecetteId = $null
+
+function Update-VueRecettes {
+    param([int] $SelectionId = 0)
+    $CmbRecetteAliment.ItemsSource = Get-ListeAlimentsAffichage
+    $recettes = @(Get-Recettes -DbPath $DbPath)
+    $ListeRecettes.ItemsSource = $recettes
+    $aSelectionner = $recettes | Where-Object { [int]$_.id -eq $SelectionId } | Select-Object -First 1
+    if ($aSelectionner) { $ListeRecettes.SelectedItem = $aSelectionner } else { Clear-FormRecette }
+}
+
+function Clear-FormRecette {
+    $Script:SelectedRecetteId = $null
+    $ListeRecettes.SelectedItem = $null
+    $TxtRecetteNom.Text = ''; $TxtRecetteNotes.Text = ''
+    $GridRecetteIngredients.ItemsSource = $null
+    $TxtTotauxRecette.Text = ''
+}
+
+function Update-VueRecetteIngredients {
+    param([int] $SelectionId = 0)
+    $GridRecetteIngredients.ItemsSource = $null
+    $TxtTotauxRecette.Text = ''
+    if (-not $Script:SelectedRecetteId) { return }
+    $lignes = @(Get-RecetteIngredients -DbPath $DbPath -RecetteId $Script:SelectedRecetteId)
+    $GridRecetteIngredients.ItemsSource = $lignes
+    $t = Get-TotauxRepas -Lignes $lignes
+    $TxtTotauxRecette.Text = "Total recette : $($t.Kcal) kcal — Protéines $($t.Proteines) g — Glucides $($t.Glucides) g — Lipides $($t.Lipides) g — Fibres $($t.Fibres) g"
+    if ($SelectionId -gt 0) { $GridRecetteIngredients.SelectedItem = $GridRecetteIngredients.Items | Where-Object { [int]$_.id -eq $SelectionId } | Select-Object -First 1 }
+}
+
+$ListeRecettes.Add_SelectionChanged({
+    $item = $ListeRecettes.SelectedItem
+    if ($null -eq $item) { return }
+    $Script:SelectedRecetteId = [int]$item.id
+    $TxtRecetteNom.Text = [string]$item.nom
+    $TxtRecetteNotes.Text = [string]$item.notes
+    Update-VueRecetteIngredients
+})
+$GridRecetteIngredients.Add_SelectionChanged({
+    $item = $GridRecetteIngredients.SelectedItem
+    if ($null -eq $item) { return }
+    $CmbRecetteAliment.SelectedItem = $CmbRecetteAliment.Items | Where-Object { [int]$_.id -eq [int]$item.aliment_id } | Select-Object -First 1
+    $TxtRecetteQuantite.Text = ([double]$item.quantite).ToString([System.Globalization.CultureInfo]::GetCultureInfo('fr-FR'))
+})
+(Get-Ctrl 'BtnRecetteNouveau').Add_Click({ Clear-FormRecette })
+(Get-Ctrl 'BtnRecetteEnregistrer').Add_Click({
+    Invoke-Protege {
+        if ([string]::IsNullOrWhiteSpace($TxtRecetteNom.Text)) { Show-Erreur "Indique le nom de la recette."; return }
+        $notes = Get-TexteOuNull $TxtRecetteNotes.Text
+        if ($Script:SelectedRecetteId) {
+            $id = [int]$Script:SelectedRecetteId
+            Update-Recette -DbPath $DbPath -Id $id -Nom $TxtRecetteNom.Text.Trim() -Notes $notes
+        } else {
+            $id = [int](New-Recette -DbPath $DbPath -Nom $TxtRecetteNom.Text.Trim() -Notes $notes)
+        }
+        Update-VueRecettes -SelectionId $id
+    }
+})
+(Get-Ctrl 'BtnRecetteSupprimer').Add_Click({
+    Invoke-Protege {
+        if (-not $Script:SelectedRecetteId) { Show-Erreur "Sélectionne une recette."; return }
+        if (Show-Confirmation "Supprimer cette recette de la bibliothèque ? (les repas où elle a déjà été ajoutée la gardent)") {
+            Remove-Recette -DbPath $DbPath -Id $Script:SelectedRecetteId
+            Update-VueRecettes
+        }
+    }
+})
+function Get-SaisieIngredientRecette {
+    if (-not $Script:SelectedRecetteId) { Show-Erreur "Enregistre ou sélectionne d'abord une recette."; return $null }
+    if (-not $CmbRecetteAliment.SelectedItem) { Show-Erreur "Sélectionne un aliment dans la liste."; return $null }
+    $quantite = Get-DoubleOuNull $TxtRecetteQuantite.Text -Champ Quantité
+    if (-not $quantite) { Show-Erreur "Indique une quantité valide."; return $null }
+    [pscustomobject]@{ AlimentId = [int]$CmbRecetteAliment.SelectedItem.id; Quantite = [double]$quantite }
+}
+(Get-Ctrl 'BtnRecetteIngredientAjouter').Add_Click({
+    Invoke-Protege {
+        $saisie = Get-SaisieIngredientRecette
+        if (-not $saisie) { return }
+        $id = New-RecetteIngredient -DbPath $DbPath -RecetteId $Script:SelectedRecetteId -AlimentId $saisie.AlimentId -Quantite $saisie.Quantite
+        $TxtRecetteQuantite.Text = '100'
+        Update-VueRecetteIngredients -SelectionId ([int]$id)
+    }
+})
+(Get-Ctrl 'BtnRecetteIngredientModifier').Add_Click({
+    Invoke-Protege {
+        $item = $GridRecetteIngredients.SelectedItem
+        if (-not $item) { Show-Erreur "Sélectionne dans le tableau la ligne à modifier."; return }
+        $saisie = Get-SaisieIngredientRecette
+        if (-not $saisie) { return }
+        Update-RecetteIngredient -DbPath $DbPath -Id ([int]$item.id) -AlimentId $saisie.AlimentId -Quantite $saisie.Quantite
+        Update-VueRecetteIngredients -SelectionId ([int]$item.id)
+    }
+})
+(Get-Ctrl 'BtnRecetteIngredientSupprimer').Add_Click({
+    Invoke-Protege {
+        $item = $GridRecetteIngredients.SelectedItem
+        if (-not $item) { Show-Erreur "Sélectionne une ligne dans le tableau."; return }
+        Remove-RecetteIngredient -DbPath $DbPath -Id ([int]$item.id)
+        Update-VueRecetteIngredients
+    }
+})
+function Move-IngredientRecetteSelectionne {
+    param([int] $Direction)
+    $item = $GridRecetteIngredients.SelectedItem
+    if (-not $item) { Show-Erreur "Sélectionne une ligne dans le tableau."; return }
+    Move-RecetteIngredient -DbPath $DbPath -Id ([int]$item.id) -Direction $Direction
+    Update-VueRecetteIngredients -SelectionId ([int]$item.id)
+}
+(Get-Ctrl 'BtnRecetteIngredientMonter').Add_Click({ Invoke-Protege { Move-IngredientRecetteSelectionne -Direction -1 } })
+(Get-Ctrl 'BtnRecetteIngredientDescendre').Add_Click({ Invoke-Protege { Move-IngredientRecetteSelectionne -Direction 1 } })
+
+# --- Equivalences ---
+$ListeEquivalences = Get-Ctrl 'ListeEquivalences'
+$CmbEquivalenceReference = Get-Ctrl 'CmbEquivalenceReference'
+$TxtEquivalenceQuantite = Get-Ctrl 'TxtEquivalenceQuantite'
+$TxtEquivalenceTitre = Get-Ctrl 'TxtEquivalenceTitre'
+$GridEquivalents = Get-Ctrl 'GridEquivalents'
+$CmbEquivalentAAjouter = Get-Ctrl 'CmbEquivalentAAjouter'
+$Script:SelectedEquivalenceId = $null
+
+function Update-VueEquivalences {
+    param([int] $SelectionId = 0)
+    $aliments = Get-ListeAlimentsAffichage
+    $CmbEquivalenceReference.ItemsSource = $aliments
+    $CmbEquivalentAAjouter.ItemsSource = $aliments
+    $groupes = @(Get-EquivalencesGroupes -DbPath $DbPath)
+    $ListeEquivalences.ItemsSource = $groupes
+    $aSelectionner = $groupes | Where-Object { [int]$_.id -eq $SelectionId } | Select-Object -First 1
+    if ($aSelectionner) { $ListeEquivalences.SelectedItem = $aSelectionner } else { Clear-FormEquivalence }
+}
+
+function Clear-FormEquivalence {
+    $Script:SelectedEquivalenceId = $null
+    $ListeEquivalences.SelectedItem = $null
+    $CmbEquivalenceReference.SelectedItem = $null
+    $TxtEquivalenceQuantite.Text = '100'
+    $GridEquivalents.ItemsSource = $null
+    $TxtEquivalenceTitre.Text = 'Équivalents'
+}
+
+$ListeEquivalences.Add_SelectionChanged({
+    $item = $ListeEquivalences.SelectedItem
+    if ($null -eq $item) { return }
+    $Script:SelectedEquivalenceId = [int]$item.id
+    $CmbEquivalenceReference.SelectedItem = $CmbEquivalenceReference.Items | Where-Object { [int]$_.id -eq [int]$item.aliment_id } | Select-Object -First 1
+    $TxtEquivalenceQuantite.Text = ([double]$item.quantite).ToString([System.Globalization.CultureInfo]::GetCultureInfo('fr-FR'))
+    $TxtEquivalenceTitre.Text = "Équivalents de $($item.affichage) — même apport en $($item.base_libelle)"
+    $GridEquivalents.ItemsSource = @($item.Equivalents)
+})
+(Get-Ctrl 'BtnEquivalenceNouveau').Add_Click({ Clear-FormEquivalence })
+(Get-Ctrl 'BtnEquivalenceEnregistrer').Add_Click({
+    Invoke-Protege {
+        if (-not $CmbEquivalenceReference.SelectedItem) { Show-Erreur "Sélectionne l'aliment de référence."; return }
+        $quantite = Get-DoubleOuNull $TxtEquivalenceQuantite.Text -Champ Quantité
+        if (-not $quantite) { Show-Erreur "Indique une quantité de référence valide."; return }
+        if ($Script:SelectedEquivalenceId) {
+            $id = [int]$Script:SelectedEquivalenceId
+            Update-EquivalenceGroupe -DbPath $DbPath -Id $id -AlimentId $CmbEquivalenceReference.SelectedItem.id -Quantite $quantite
+        } else {
+            $id = [int](New-EquivalenceGroupe -DbPath $DbPath -AlimentId $CmbEquivalenceReference.SelectedItem.id -Quantite $quantite)
+        }
+        Update-VueEquivalences -SelectionId $id
+    }
+})
+(Get-Ctrl 'BtnEquivalenceSupprimer').Add_Click({
+    Invoke-Protege {
+        if (-not $Script:SelectedEquivalenceId) { Show-Erreur "Sélectionne un aliment de référence."; return }
+        if (Show-Confirmation "Supprimer cet aliment de référence et ses équivalents ?") {
+            Remove-EquivalenceGroupe -DbPath $DbPath -Id $Script:SelectedEquivalenceId
+            Update-VueEquivalences
+        }
+    }
+})
+function Move-EquivalenceSelectionnee {
+    param([int] $Direction)
+    if (-not $Script:SelectedEquivalenceId) { Show-Erreur "Sélectionne un aliment de référence."; return }
+    $id = [int]$Script:SelectedEquivalenceId
+    Move-EquivalenceGroupe -DbPath $DbPath -Id $id -Direction $Direction
+    Update-VueEquivalences -SelectionId $id
+}
+(Get-Ctrl 'BtnEquivalenceMonter').Add_Click({ Invoke-Protege { Move-EquivalenceSelectionnee -Direction -1 } })
+(Get-Ctrl 'BtnEquivalenceDescendre').Add_Click({ Invoke-Protege { Move-EquivalenceSelectionnee -Direction 1 } })
+(Get-Ctrl 'BtnEquivalentAjouter').Add_Click({
+    Invoke-Protege {
+        if (-not $Script:SelectedEquivalenceId) { Show-Erreur "Enregistre ou sélectionne d'abord un aliment de référence."; return }
+        if (-not $CmbEquivalentAAjouter.SelectedItem) { Show-Erreur "Sélectionne l'aliment équivalent dans la liste."; return }
+        Add-EquivalenceAliment -DbPath $DbPath -GroupeId $Script:SelectedEquivalenceId -AlimentId $CmbEquivalentAAjouter.SelectedItem.id
+        Update-VueEquivalences -SelectionId ([int]$Script:SelectedEquivalenceId)
+    }
+})
+(Get-Ctrl 'BtnEquivalentSuggerer').Add_Click({
+    Invoke-Protege {
+        if (-not $Script:SelectedEquivalenceId) { Show-Erreur "Sélectionne d'abord un aliment de référence."; return }
+        $id = [int]$Script:SelectedEquivalenceId
+        $suggestions = @(Get-SuggestionsEquivalence -DbPath $DbPath -GroupeId $id)
+        if ($suggestions.Count -eq 0) { Show-Info "Aucun autre aliment comparable trouvé dans la bibliothèque."; return }
+        foreach ($a in $suggestions) { Add-EquivalenceAliment -DbPath $DbPath -GroupeId $id -AlimentId ([int]$a.id) }
+        Update-VueEquivalences -SelectionId $id
+    }
+})
+(Get-Ctrl 'BtnEquivalentSupprimer').Add_Click({
+    Invoke-Protege {
+        $item = $GridEquivalents.SelectedItem
+        if (-not $item) { Show-Erreur "Sélectionne une ligne dans le tableau."; return }
+        Remove-EquivalenceAliment -DbPath $DbPath -Id ([int]$item.id)
+        Update-VueEquivalences -SelectionId ([int]$Script:SelectedEquivalenceId)
     }
 })
 
@@ -1329,6 +1563,8 @@ function Update-VueSeanceExercices {
         $e | Add-Member -NotePropertyName 'charge_affichage' -NotePropertyValue (Get-ValeurAvecDetailSeries -SeriesDetail $detail -ValeurGlobale $e.charge -NomChamp 'charge')
         $e | Add-Member -NotePropertyName 'recuperation_affichage' -NotePropertyValue (Get-ValeurAvecDetailSeries -SeriesDetail $detail -ValeurGlobale $e.recuperation_s -NomChamp 'recuperation_s')
     }
+    $numeros = @(Get-NumerosExercices -Exercices $exercices)
+    for ($i = 0; $i -lt $exercices.Count; $i++) { $exercices[$i] | Add-Member -NotePropertyName 'numero_affichage' -NotePropertyValue $numeros[$i].Numero -Force }
     $GridSeanceExercices.ItemsSource = $exercices
     Update-VueRecapSeries
 }
@@ -1527,7 +1763,7 @@ foreach ($chk in $ChkProgrammeTempo, $ChkProgrammeRir) { $chk.Add_Checked($enreg
 function Move-ExerciceSeanceSelectionne {
     param([int] $Direction)
     $item = $GridSeanceExercices.SelectedItem
-    if (-not $item) { Show-Erreur "SÃ©lectionne un exercice dans le tableau."; return }
+    if (-not $item) { Show-Erreur "Sélectionne un exercice dans le tableau."; return }
     $id = [int]$item.id
     Move-SeanceExercice -DbPath $DbPath -Id $id -Direction $Direction
     Update-VueSeanceExercices
@@ -1535,6 +1771,16 @@ function Move-ExerciceSeanceSelectionne {
 }
 (Get-Ctrl 'BtnExerciceMonter').Add_Click({ Invoke-Protege { Move-ExerciceSeanceSelectionne -Direction -1 } })
 (Get-Ctrl 'BtnExerciceDescendre').Add_Click({ Invoke-Protege { Move-ExerciceSeanceSelectionne -Direction 1 } })
+(Get-Ctrl 'BtnExerciceSuperset').Add_Click({
+    Invoke-Protege {
+        $item = $GridSeanceExercices.SelectedItem
+        if (-not $item) { Show-Erreur "Sélectionne le premier exercice du superset dans le tableau."; return }
+        $id = [int]$item.id
+        Switch-SupersetExercice -DbPath $DbPath -Contexte 'Programme' -Id $id
+        Update-VueSeanceExercices
+        $GridSeanceExercices.SelectedItem = $GridSeanceExercices.Items | Where-Object { [int]$_.id -eq $id }
+    }
+})
 
 (Get-Ctrl 'BtnExerciceSupprimerDeSeance').Add_Click({
     Invoke-Protege {
@@ -1571,16 +1817,30 @@ $ListeRepas = Get-Ctrl 'ListeRepas'
 $TxtNouveauRepas = Get-Ctrl 'TxtNouveauRepas'
 $GridRepasAliments = Get-Ctrl 'GridRepasAliments'
 $TxtTotauxRepas = Get-Ctrl 'TxtTotauxRepas'
+$TxtTotalJour = Get-Ctrl 'TxtTotalJour'
 $CmbAlimentAAjouter = Get-Ctrl 'CmbAlimentAAjouter'
 $TxtQuantiteAliment = Get-Ctrl 'TxtQuantiteAliment'
+$CmbRecetteAAjouter = Get-Ctrl 'CmbRecetteAAjouter'
+$TxtRecettePortions = Get-Ctrl 'TxtRecettePortions'
+$ChkPlanEquivalences = Get-Ctrl 'ChkPlanEquivalences'
+$ChkPlanEquivalences.IsChecked = ((Get-Parametre -DbPath $DbPath -Cle 'nutrition_avec_equivalences' -Defaut '1') -eq '1')
+$ChkPlanEquivalences.Add_Click({ Invoke-Protege { Set-Parametre -DbPath $DbPath -Cle 'nutrition_avec_equivalences' -Valeur $(if ($ChkPlanEquivalences.IsChecked) { '1' } else { '0' }) } })
+
+function Get-ListeAlimentsAffichage {
+    @(Get-Aliments -DbPath $DbPath | ForEach-Object {
+        [pscustomobject]@{ id = $_.id; affichage = "$($_.nom) ($($_.quantite_reference) $($_.unite) = $($_.kcal) kcal)" }
+    })
+}
 
 function Update-VueNutritionClients {
     $clients = @(Get-Clients -DbPath $DbPath | ForEach-Object {
         [pscustomobject]@{ id = $_.id; affichage = "$($_.nom) $($_.prenom)" }
     })
     $CmbNutritionClient.ItemsSource = $clients
-    $CmbAlimentAAjouter.ItemsSource = @(Get-Aliments -DbPath $DbPath | ForEach-Object {
-        [pscustomobject]@{ id = $_.id; affichage = "$($_.nom) ($($_.quantite_reference) $($_.unite) = $($_.kcal) kcal)" }
+    $CmbAlimentAAjouter.ItemsSource = Get-ListeAlimentsAffichage
+    $CmbRecetteAAjouter.ItemsSource = @(Get-Recettes -DbPath $DbPath | ForEach-Object {
+        $tot = Get-TotauxRepas -Lignes @(Get-RecetteIngredients -DbPath $DbPath -RecetteId ([int]$_.id))
+        [pscustomobject]@{ id = $_.id; affichage = "$($_.nom) ($($tot.Kcal) kcal)" }
     })
     if ($clients.Count -gt 0 -and -not $CmbNutritionClient.SelectedItem) { $CmbNutritionClient.SelectedIndex = 0 }
 }
@@ -1606,29 +1866,47 @@ function Update-VueTypesJour {
     if ($types.Count -gt 0) { $ListeTypesJour.SelectedIndex = 0 }
 }
 
+function Update-TotalJour {
+    if (-not $ListeTypesJour.SelectedItem) { $TxtTotalJour.Text = 'Total de la journée : sélectionne un type de jour'; return }
+    $t = Get-TotauxTypeJour -DbPath $DbPath -TypeJourId $ListeTypesJour.SelectedItem.id
+    $TxtTotalJour.Text = "Total de la journée ($($ListeTypesJour.SelectedItem.nom)) : $($t.Kcal) kcal — Protéines $($t.Proteines) g — Glucides $($t.Glucides) g — Lipides $($t.Lipides) g — Fibres $($t.Fibres) g"
+}
+
 function Update-VueRepas {
+    param([int] $SelectionId = 0)
     $ListeRepas.ItemsSource = $null
     $GridRepasAliments.ItemsSource = $null
+    Update-TotalJour
     if (-not $ListeTypesJour.SelectedItem) { return }
     $repasListe = @(Get-Repas -DbPath $DbPath -TypeJourId $ListeTypesJour.SelectedItem.id)
     $ListeRepas.ItemsSource = $repasListe
-    if ($repasListe.Count -gt 0) { $ListeRepas.SelectedIndex = 0 }
+    $aSelectionner = $repasListe | Where-Object { [int]$_.id -eq $SelectionId } | Select-Object -First 1
+    if ($aSelectionner) { $ListeRepas.SelectedItem = $aSelectionner } elseif ($repasListe.Count -gt 0) { $ListeRepas.SelectedIndex = 0 }
 }
 
 function Update-VueRepasAliments {
+    param([int] $SelectionId = 0)
     $GridRepasAliments.ItemsSource = $null
     $TxtTotauxRepas.Text = ''
+    Update-TotalJour
     if (-not $ListeRepas.SelectedItem) { return }
     $lignes = @(Get-RepasAliments -DbPath $DbPath -RepasId $ListeRepas.SelectedItem.id)
     $GridRepasAliments.ItemsSource = $lignes
     $totaux = Get-TotauxRepas -Lignes $lignes
     $TxtTotauxRepas.Text = "Total repas : $($totaux.Kcal) kcal — Proteines $($totaux.Proteines) g — Glucides $($totaux.Glucides) g — Lipides $($totaux.Lipides) g — Fibres $($totaux.Fibres) g"
+    if ($SelectionId -gt 0) { $GridRepasAliments.SelectedItem = $GridRepasAliments.Items | Where-Object { [int]$_.id -eq $SelectionId } | Select-Object -First 1 }
 }
 
 $CmbNutritionClient.Add_SelectionChanged({ Update-VuePlansPourClient })
 $CmbPlanSelection.Add_SelectionChanged({ Update-VueTypesJour })
 $ListeTypesJour.Add_SelectionChanged({ Update-VueRepas })
 $ListeRepas.Add_SelectionChanged({ Update-VueRepasAliments })
+$GridRepasAliments.Add_SelectionChanged({
+    $item = $GridRepasAliments.SelectedItem
+    if ($null -eq $item) { return }
+    $CmbAlimentAAjouter.SelectedItem = $CmbAlimentAAjouter.Items | Where-Object { [int]$_.id -eq [int]$item.aliment_id } | Select-Object -First 1
+    $TxtQuantiteAliment.Text = ([double]$item.quantite).ToString([System.Globalization.CultureInfo]::GetCultureInfo('fr-FR'))
+})
 
 (Get-Ctrl 'BtnPlanNouveau').Add_Click({
     Invoke-Protege {
@@ -1657,7 +1935,7 @@ $ListeRepas.Add_SelectionChanged({ Update-VueRepasAliments })
         $dialog.Filter = 'Fichier PDF (*.pdf)|*.pdf'
         $dialog.FileName = "PlanNutrition.pdf"
         if ($dialog.ShowDialog()) {
-            Export-PlanNutritionPdf -DbPath $DbPath -PlanNutritionId $CmbPlanSelection.SelectedItem.id -Path $dialog.FileName
+            Export-PlanNutritionPdf -DbPath $DbPath -PlanNutritionId $CmbPlanSelection.SelectedItem.id -Path $dialog.FileName -AvecEquivalences ([bool]$ChkPlanEquivalences.IsChecked)
             Show-Info "Export PDF termine."
         }
     }
@@ -1670,7 +1948,7 @@ $ListeRepas.Add_SelectionChanged({ Update-VueRepasAliments })
         $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
         $dialog.FileName = "PlanNutrition.xlsx"
         if ($dialog.ShowDialog()) {
-            Export-PlanNutritionExcel -DbPath $DbPath -PlanNutritionId $CmbPlanSelection.SelectedItem.id -Path $dialog.FileName
+            Export-PlanNutritionExcel -DbPath $DbPath -PlanNutritionId $CmbPlanSelection.SelectedItem.id -Path $dialog.FileName -AvecEquivalences ([bool]$ChkPlanEquivalences.IsChecked)
             Show-Info "Export Excel termine."
         }
     }
@@ -1699,9 +1977,9 @@ $ListeRepas.Add_SelectionChanged({ Update-VueRepasAliments })
     Invoke-Protege {
         if (-not $ListeTypesJour.SelectedItem) { Show-Erreur "Selectionne d'abord un type de jour."; return }
         if ([string]::IsNullOrWhiteSpace($TxtNouveauRepas.Text)) { Show-Erreur "Indique un nom de repas."; return }
-        New-Repas -DbPath $DbPath -TypeJourId $ListeTypesJour.SelectedItem.id -Nom $TxtNouveauRepas.Text.Trim() | Out-Null
+        $nouvelId = New-Repas -DbPath $DbPath -TypeJourId $ListeTypesJour.SelectedItem.id -Nom $TxtNouveauRepas.Text.Trim()
         $TxtNouveauRepas.Text = ''
-        Update-VueRepas
+        Update-VueRepas -SelectionId ([int]$nouvelId)
     }
 })
 (Get-Ctrl 'BtnRepasSupprimer').Add_Click({
@@ -1713,16 +1991,43 @@ $ListeRepas.Add_SelectionChanged({ Update-VueRepasAliments })
         }
     }
 })
+function Move-RepasSelectionne {
+    param([int] $Direction)
+    if (-not $ListeRepas.SelectedItem) { Show-Erreur "Sélectionne un repas."; return }
+    $id = [int]$ListeRepas.SelectedItem.id
+    Move-Repas -DbPath $DbPath -Id $id -Direction $Direction
+    Update-VueRepas -SelectionId $id
+}
+(Get-Ctrl 'BtnRepasMonter').Add_Click({ Invoke-Protege { Move-RepasSelectionne -Direction -1 } })
+(Get-Ctrl 'BtnRepasDescendre').Add_Click({ Invoke-Protege { Move-RepasSelectionne -Direction 1 } })
+
+function Get-SaisieAlimentRepas {
+    <# Lit l'aliment et la quantite du formulaire, ou $null (avec message) si incomplet. #>
+    if (-not $CmbAlimentAAjouter.SelectedItem) { Show-Erreur "Selectionne un aliment dans la liste."; return $null }
+    $quantite = Get-DoubleOuNull $TxtQuantiteAliment.Text -Champ Quantité
+    if (-not $quantite) { Show-Erreur "Indique une quantite valide."; return $null }
+    [pscustomobject]@{ AlimentId = [int]$CmbAlimentAAjouter.SelectedItem.id; Quantite = [double]$quantite }
+}
 
 (Get-Ctrl 'BtnAlimentAjouterRepas').Add_Click({
     Invoke-Protege {
         if (-not $ListeRepas.SelectedItem) { Show-Erreur "Selectionne d'abord un repas."; return }
-        if (-not $CmbAlimentAAjouter.SelectedItem) { Show-Erreur "Selectionne un aliment dans la liste."; return }
-        $quantite = Get-DoubleOuNull $TxtQuantiteAliment.Text -Champ Quantité
-        if (-not $quantite) { Show-Erreur "Indique une quantite valide."; return }
-        New-RepasAliment -DbPath $DbPath -RepasId $ListeRepas.SelectedItem.id -AlimentId $CmbAlimentAAjouter.SelectedItem.id -Quantite $quantite | Out-Null
+        $saisie = Get-SaisieAlimentRepas
+        if (-not $saisie) { return }
+        $nouvelId = New-RepasAliment -DbPath $DbPath -RepasId $ListeRepas.SelectedItem.id -AlimentId $saisie.AlimentId -Quantite $saisie.Quantite
         $TxtQuantiteAliment.Text = '100'
-        Update-VueRepasAliments
+        Update-VueRepasAliments -SelectionId ([int]$nouvelId)
+    }
+})
+(Get-Ctrl 'BtnAlimentModifierRepas').Add_Click({
+    Invoke-Protege {
+        $item = $GridRepasAliments.SelectedItem
+        if (-not $item) { Show-Erreur "Sélectionne dans le tableau la ligne à modifier."; return }
+        $saisie = Get-SaisieAlimentRepas
+        if (-not $saisie) { return }
+        $id = [int]$item.id
+        Update-RepasAliment -DbPath $DbPath -Id $id -AlimentId $saisie.AlimentId -Quantite $saisie.Quantite
+        Update-VueRepasAliments -SelectionId $id
     }
 })
 (Get-Ctrl 'BtnAlimentSupprimerDeRepas').Add_Click({
@@ -1731,6 +2036,38 @@ $ListeRepas.Add_SelectionChanged({ Update-VueRepasAliments })
         if (-not $item) { Show-Erreur "Selectionne un aliment dans le tableau."; return }
         Remove-RepasAliment -DbPath $DbPath -Id ([int]$item.id)
         Update-VueRepasAliments
+    }
+})
+function Move-AlimentRepasSelectionne {
+    param([int] $Direction)
+    $item = $GridRepasAliments.SelectedItem
+    if (-not $item) { Show-Erreur "Sélectionne une ligne dans le tableau."; return }
+    $id = [int]$item.id
+    Move-RepasAliment -DbPath $DbPath -Id $id -Direction $Direction
+    Update-VueRepasAliments -SelectionId $id
+}
+(Get-Ctrl 'BtnAlimentMonter').Add_Click({ Invoke-Protege { Move-AlimentRepasSelectionne -Direction -1 } })
+(Get-Ctrl 'BtnAlimentDescendre').Add_Click({ Invoke-Protege { Move-AlimentRepasSelectionne -Direction 1 } })
+
+(Get-Ctrl 'BtnRecetteAjouterRepas').Add_Click({
+    Invoke-Protege {
+        if (-not $ListeRepas.SelectedItem) { Show-Erreur "Sélectionne d'abord un repas."; return }
+        if (-not $CmbRecetteAAjouter.SelectedItem) { Show-Erreur "Sélectionne une recette dans la liste (à créer dans Bibliothèques > Recettes)."; return }
+        $portions = Get-DoubleOuNull $TxtRecettePortions.Text -Champ Portions
+        if (-not $portions -or $portions -le 0) { Show-Erreur "Indique un nombre de portions supérieur à 0 (ex. 1 ou 0,5)."; return }
+        Add-RecetteAuRepas -DbPath $DbPath -RepasId $ListeRepas.SelectedItem.id -RecetteId $CmbRecetteAAjouter.SelectedItem.id -Portions $portions | Out-Null
+        $TxtRecettePortions.Text = '1'
+        Update-VueRepasAliments
+    }
+})
+(Get-Ctrl 'BtnRecetteRetirerDuRepas').Add_Click({
+    Invoke-Protege {
+        $item = $GridRepasAliments.SelectedItem
+        if (-not $item -or $item.recette_groupe -is [DBNull] -or $null -eq $item.recette_groupe) { Show-Erreur "Sélectionne dans le tableau un ingrédient de la recette à retirer."; return }
+        if (Show-Confirmation "Retirer toute la recette « $($item.recette_nom) » de ce repas ?") {
+            Remove-RecetteDuRepas -DbPath $DbPath -RepasId $ListeRepas.SelectedItem.id -Groupe ([int]$item.recette_groupe)
+            Update-VueRepasAliments
+        }
     }
 })
 
@@ -1778,6 +2115,7 @@ $TxtRoadmapPoidsMoyen = Get-Ctrl 'TxtRoadmapPoidsMoyen'
 $TxtRoadmapDepense = Get-Ctrl 'TxtRoadmapDepense'
 $TxtRoadmapCardio = Get-Ctrl 'TxtRoadmapCardio'
 $TxtRoadmapPas = Get-Ctrl 'TxtRoadmapPas'
+$TxtRoadmapPrecisionDepense = Get-Ctrl 'TxtRoadmapPrecisionDepense'
 $TxtRoadmapPrecisionTraining = Get-Ctrl 'TxtRoadmapPrecisionTraining'
 $TxtRoadmapEvenements = Get-Ctrl 'TxtRoadmapEvenements'
 $TxtRoadmapNotes = Get-Ctrl 'TxtRoadmapNotes'
@@ -1998,7 +2336,7 @@ function Clear-FormRoadmap {
     $Script:SelectedRoadmapId = $null
     $TxtRoadmapSemaine.Text = ''; $DateRoadmapDebut.SelectedDate = $null; $TxtRoadmapPhase.Text = ''
     $TxtRoadmapNutrition.Text = ''; $TxtRoadmapPoidsMoyen.Text = ''; $TxtRoadmapDepense.Text = ''
-    $TxtRoadmapCardio.Text = ''; $TxtRoadmapPas.Text = ''; $TxtRoadmapPrecisionTraining.Text = ''
+    $TxtRoadmapCardio.Text = ''; $TxtRoadmapPas.Text = ''; $TxtRoadmapPrecisionDepense.Text = ''; $TxtRoadmapPrecisionTraining.Text = ''
     $TxtRoadmapEvenements.Text = ''; $TxtRoadmapNotes.Text = ''
     $GridRoadmap.SelectedItem = $null
 }
@@ -2021,6 +2359,7 @@ $GridRoadmap.Add_SelectionChanged({
     $TxtRoadmapDepense.Text = [string]$item.depense_calorique
     $TxtRoadmapCardio.Text = [string]$item.cardio_minutes
     $TxtRoadmapPas.Text = [string]$item.pas
+    $TxtRoadmapPrecisionDepense.Text = [string]$item.precision_depense
     $TxtRoadmapPrecisionTraining.Text = [string]$item.precision_training
     $TxtRoadmapEvenements.Text = [string]$item.evenements
     $TxtRoadmapNotes.Text = [string]$item.notes
@@ -2038,7 +2377,7 @@ $GridRoadmap.Add_SelectionChanged({
             SemaineNumero = $semaine; DateDebut = $dateDebut; Phase = (Get-TexteOuNull $TxtRoadmapPhase.Text)
             Nutrition = (Get-TexteOuNull $TxtRoadmapNutrition.Text); PoidsMoyen = (Get-DoubleOuNull $TxtRoadmapPoidsMoyen.Text -Champ Poids moyen)
             DepenseCalorique = (Get-DoubleOuNull $TxtRoadmapDepense.Text -Champ Dépense calorique); CardioMinutes = (Get-DoubleOuNull $TxtRoadmapCardio.Text -Champ Cardio)
-            Pas = (Get-IntOuNull $TxtRoadmapPas.Text -Champ Pas); PrecisionTraining = (Get-TexteOuNull $TxtRoadmapPrecisionTraining.Text)
+            Pas = (Get-IntOuNull $TxtRoadmapPas.Text -Champ Pas); PrecisionDepense = (Get-TexteOuNull $TxtRoadmapPrecisionDepense.Text); PrecisionTraining = (Get-TexteOuNull $TxtRoadmapPrecisionTraining.Text)
             Evenements = (Get-TexteOuNull $TxtRoadmapEvenements.Text); Notes = (Get-TexteOuNull $TxtRoadmapNotes.Text)
         }
         if ($Script:SelectedRoadmapId) {
@@ -2064,10 +2403,12 @@ $GridRoadmap.Add_SelectionChanged({
     Invoke-Protege {
         $dialog = New-Object Microsoft.Win32.SaveFileDialog
         $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
-        $dialog.FileName = 'Modele_Roadmap.xlsx'
+        $client = $CmbSuiviClient.SelectedItem
+        $dialog.FileName = if ($client) { "Roadmap - $($client.affichage).xlsx" } else { 'Roadmap.xlsx' }
         if ($dialog.ShowDialog()) {
-            Export-ModeleRoadmapExcel -Path $dialog.FileName
-            Show-Info "Modèle créé. Remplis-le (une ligne par semaine) puis réimporte-le via ""Importer la roadmap remplie...""."
+            $titre = if ($client) { "ROADMAP - $($client.affichage)" } else { 'ROADMAP' }
+            Export-ModeleRoadmapExcel -Path $dialog.FileName -DbPath $DbPath -ClientId $(if ($client) { [int]$client.id } else { 0 }) -Titre $titre
+            Show-Info "Roadmap créée (52 semaines, semaines déjà saisies pré-remplies). Remplis-la puis réimporte-la via ""Importer la roadmap remplie...""."
         }
     }
 })

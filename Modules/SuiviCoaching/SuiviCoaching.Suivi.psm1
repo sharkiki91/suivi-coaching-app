@@ -92,23 +92,24 @@ function New-RoadmapSemaine {
         [string] $DateDebut,
         [string] $Phase,
         [string] $Nutrition,
-        [double] $PoidsMoyen,
-        [double] $DepenseCalorique,
-        [double] $CardioMinutes,
-        [int] $Pas,
+        [Nullable[double]] $PoidsMoyen,
+        [Nullable[double]] $DepenseCalorique,
+        [Nullable[double]] $CardioMinutes,
+        [Nullable[int]] $Pas,
+        [string] $PrecisionDepense,
         [string] $PrecisionTraining,
         [string] $Evenements,
         [string] $Notes
     )
     $query = @"
-INSERT INTO roadmap_semaines (client_id, semaine_numero, date_debut, phase, nutrition, poids_moyen, depense_calorique, cardio_minutes, pas, precision_training, evenements, notes)
-VALUES (@ClientId, @SemaineNumero, @DateDebut, @Phase, @Nutrition, @PoidsMoyen, @DepenseCalorique, @CardioMinutes, @Pas, @PrecisionTraining, @Evenements, @Notes);
+INSERT INTO roadmap_semaines (client_id, semaine_numero, date_debut, phase, nutrition, poids_moyen, depense_calorique, cardio_minutes, pas, precision_depense, precision_training, evenements, notes)
+VALUES (@ClientId, @SemaineNumero, @DateDebut, @Phase, @Nutrition, @PoidsMoyen, @DepenseCalorique, @CardioMinutes, @Pas, @PrecisionDepense, @PrecisionTraining, @Evenements, @Notes);
 SELECT last_insert_rowid() AS id;
 "@
     (Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{
         ClientId = $ClientId; SemaineNumero = $SemaineNumero; DateDebut = $DateDebut; Phase = $Phase; Nutrition = $Nutrition
         PoidsMoyen = $PoidsMoyen; DepenseCalorique = $DepenseCalorique; CardioMinutes = $CardioMinutes; Pas = $Pas
-        PrecisionTraining = $PrecisionTraining; Evenements = $Evenements; Notes = $Notes
+        PrecisionDepense = $PrecisionDepense; PrecisionTraining = $PrecisionTraining; Evenements = $Evenements; Notes = $Notes
     }).id
 }
 
@@ -120,23 +121,24 @@ function Update-RoadmapSemaine {
         [string] $DateDebut,
         [string] $Phase,
         [string] $Nutrition,
-        [double] $PoidsMoyen,
-        [double] $DepenseCalorique,
-        [double] $CardioMinutes,
-        [int] $Pas,
+        [Nullable[double]] $PoidsMoyen,
+        [Nullable[double]] $DepenseCalorique,
+        [Nullable[double]] $CardioMinutes,
+        [Nullable[int]] $Pas,
+        [string] $PrecisionDepense,
         [string] $PrecisionTraining,
         [string] $Evenements,
         [string] $Notes
     )
     Invoke-SqliteQuery -DataSource $DbPath -Query @"
 UPDATE roadmap_semaines SET semaine_numero = @SemaineNumero, date_debut = @DateDebut, phase = @Phase, nutrition = @Nutrition,
-    poids_moyen = @PoidsMoyen, depense_calorique = @DepenseCalorique, cardio_minutes = @CardioMinutes, pas = @Pas,
+    poids_moyen = @PoidsMoyen, depense_calorique = @DepenseCalorique, cardio_minutes = @CardioMinutes, pas = @Pas, precision_depense = @PrecisionDepense,
     precision_training = @PrecisionTraining, evenements = @Evenements, notes = @Notes
 WHERE id = @Id
 "@ -SqlParameters @{
         Id = $Id; SemaineNumero = $SemaineNumero; DateDebut = $DateDebut; Phase = $Phase; Nutrition = $Nutrition
         PoidsMoyen = $PoidsMoyen; DepenseCalorique = $DepenseCalorique; CardioMinutes = $CardioMinutes; Pas = $Pas
-        PrecisionTraining = $PrecisionTraining; Evenements = $Evenements; Notes = $Notes
+        PrecisionDepense = $PrecisionDepense; PrecisionTraining = $PrecisionTraining; Evenements = $Evenements; Notes = $Notes
     }
 }
 

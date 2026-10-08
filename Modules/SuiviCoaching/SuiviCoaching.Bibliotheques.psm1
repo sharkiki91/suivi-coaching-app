@@ -137,7 +137,12 @@ function Remove-Aliment {
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $Id
     )
-    Invoke-SqliteQuery -DataSource $DbPath -Query "DELETE FROM aliments WHERE id = @Id" -SqlParameters @{ Id = $Id }
+    Invoke-SqliteQuery -DataSource $DbPath -Query @"
+DELETE FROM recette_ingredients WHERE aliment_id = @Id;
+DELETE FROM equivalences_aliments WHERE aliment_id = @Id OR groupe_id IN (SELECT id FROM equivalences_groupes WHERE aliment_id = @Id);
+DELETE FROM equivalences_groupes WHERE aliment_id = @Id;
+DELETE FROM aliments WHERE id = @Id;
+"@ -SqlParameters @{ Id = $Id }
 }
 
 # --- Complements ---

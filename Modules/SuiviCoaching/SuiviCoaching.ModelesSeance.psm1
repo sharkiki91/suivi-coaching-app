@@ -173,7 +173,7 @@ function New-SeanceDepuisModele {
     $exercices = @(Get-SeanceModeleExercices -DbPath $DbPath -SeanceModeleId $SeanceModeleId)
     foreach ($ex in $exercices) {
         $nouvelExerciceId = New-SeanceExercice -DbPath $DbPath -SeanceId $seanceId -ExerciceId ([int]$ex.exercice_id) `
-            -Series $ex.series -Repetitions $ex.repetitions -Charge $ex.charge -RecuperationS $ex.recuperation_s -Tempo $ex.tempo -Rir $ex.rir -Variante $ex.variante -Notes $ex.notes
+            -Series $ex.series -Repetitions $ex.repetitions -Charge $ex.charge -RecuperationS $ex.recuperation_s -Tempo $ex.tempo -Rir $ex.rir -Variante $ex.variante -Notes $ex.notes -Superset $(if ([string]$ex.superset -eq '1') { 1 } else { 0 })
         $seriesModele = @(Get-SeanceModeleExerciceSeries -DbPath $DbPath -SeanceModeleExerciceId ([int]$ex.id))
         foreach ($s in $seriesModele) {
             New-SeanceExerciceSerie -DbPath $DbPath -SeanceExerciceId $nouvelExerciceId -Repetitions $s.repetitions -Charge $s.charge -RecuperationS $s.recuperation_s | Out-Null

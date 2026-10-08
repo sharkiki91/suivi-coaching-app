@@ -310,6 +310,34 @@ CREATE TABLE IF NOT EXISTS parametres (
     cle TEXT PRIMARY KEY,
     valeur TEXT
 );
+
+CREATE TABLE IF NOT EXISTS recettes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL,
+    notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS recette_ingredients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recette_id INTEGER NOT NULL REFERENCES recettes(id) ON DELETE CASCADE,
+    aliment_id INTEGER NOT NULL REFERENCES aliments(id),
+    quantite REAL NOT NULL,
+    ordre INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS equivalences_groupes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    aliment_id INTEGER NOT NULL REFERENCES aliments(id),
+    quantite REAL NOT NULL,
+    ordre INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS equivalences_aliments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    groupe_id INTEGER NOT NULL REFERENCES equivalences_groupes(id) ON DELETE CASCADE,
+    aliment_id INTEGER NOT NULL REFERENCES aliments(id),
+    ordre INTEGER NOT NULL DEFAULT 0
+);
 "@
 
     Invoke-SqliteQuery -DataSource $DbPath -Query $schema
@@ -398,6 +426,28 @@ CREATE TABLE exercices_realises (
                 Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE $table ADD COLUMN $nouvelle TEXT"
             }
         }
+    }
+
+    <# Migration : "superset" = 1 quand l'exercice s'enchaine avec le suivant sans recup (la recup se fait apres le suivant). #>
+    foreach ($table in @('seance_exercices', 'seance_modele_exercices')) {
+        $colonnes = @(Invoke-SqliteQuery -DataSource $DbPath -Query "PRAGMA table_info($table)")
+        if ($colonnes -and -not ($colonnes | Where-Object { $_.name -eq 'superset' })) {
+            Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE $table ADD COLUMN superset INTEGER NOT NULL DEFAULT 0"
+        }
+    }
+
+    <# Migration : lignes d'un repas issues d'une recette (recette_groupe identique pour tous les ingredients d'une recette ajoutee). #>
+    $colonnesRA = @(Invoke-SqliteQuery -DataSource $DbPath -Query "PRAGMA table_info(repas_aliments)")
+    foreach ($col in @(@{ Nom = 'recette_nom'; Type = 'TEXT' }, @{ Nom = 'recette_groupe'; Type = 'INTEGER' })) {
+        if ($colonnesRA -and -not ($colonnesRA | Where-Object { $_.name -eq $col.Nom })) {
+            Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE repas_aliments ADD COLUMN $($col.Nom) $($col.Type)"
+        }
+    }
+
+    <# Migration : colonne "PRECISION DEPENSE" de l'onglet ROADMAP d'origine du coach (texte libre). #>
+    $colonnesRoadmap = @(Invoke-SqliteQuery -DataSource $DbPath -Query "PRAGMA table_info(roadmap_semaines)")
+    if ($colonnesRoadmap -and -not ($colonnesRoadmap | Where-Object { $_.name -eq 'precision_depense' })) {
+        Invoke-SqliteQuery -DataSource $DbPath -Query "ALTER TABLE roadmap_semaines ADD COLUMN precision_depense TEXT"
     }
 
     <# Migration : colonne "jour_semaine" ajoutee apres coup sur la table "seances". #>

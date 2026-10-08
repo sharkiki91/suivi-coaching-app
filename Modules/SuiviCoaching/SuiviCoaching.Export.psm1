@@ -138,7 +138,7 @@ WHERE p.id = @Id
     .recap .muscle { text-align: left; padding-left: 8px; }
     .recap td.total { background: #F3F0FA; }
     .recap th.total { background: $Script:CouleurLavande; }
-    .bloc { display: flex; margin-bottom: 16px; border: 2px solid $v; break-inside: avoid; page-break-inside: avoid; }   /* une seance n'est jamais coupee entre deux pages */
+    .bloc { display: flex; flex-wrap: wrap; margin-bottom: 16px; border: 2px solid $v; break-inside: avoid; page-break-inside: avoid; }   /* une seance n'est jamais coupee entre deux pages */
     .bloc .bande { background: $lav; color: #fff; font-size: 17px; font-weight: bold; width: 46px; min-width: 46px; border-right: 2px solid $v; display: flex; align-items: center; justify-content: center; }
     .bloc .bande div { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; text-align: center; }
     .bloc .bande .jour { font-size: 11px; font-weight: normal; }
@@ -146,6 +146,8 @@ WHERE p.id = @Id
     .seance th { background: $v; color: #fff; font-size: 10px; font-weight: bold; padding: 6px 3px; border-right: 2px solid $sep; text-transform: uppercase; }
     .seance td { text-align: center; vertical-align: middle; font-weight: bold; font-size: 10.5px; padding: 1px 4px; line-height: 1.25; }
     .seance td.num { background: $v; color: #fff; width: 26px; }
+    .seance td.num.ss { background: #3C78D8; }
+    .legende-ss { flex: 0 0 100%; margin: 0; padding: 4px 8px; font-size: 10px; border-top: 1px solid $Script:CouleurSeparateur; } .legende-ss b { background: #3C78D8; color: #fff; padding: 1px 6px; margin-right: 6px; }
     .seance td.violet { color: $v; text-transform: uppercase; }
     .seance td.nom { width: 24%; }
     .seance td.nom .note { display: block; text-transform: none; font-weight: normal; font-style: italic; color: #555; font-size: 10px; margin-top: 2px; }
@@ -215,9 +217,12 @@ WHERE p.id = @Id
             [void]$sb.Append("<tbody><tr><td colspan='$nbColonnes' class='vide'>Aucun exercice dans cette s&eacute;ance.</td></tr></tbody></table></div>")
             continue
         }
-        $numero = 0
+        $numeros = @(Get-NumerosExercices -Exercices $exercices)
+        $index = -1
         foreach ($e in $exercices) {
-            $numero++
+            $index++
+            $numero = $numeros[$index].Numero
+            $classeNum = if ($numeros[$index].EstSuperset) { 'num ss' } else { 'num' }
             $detail = @(Get-SeanceExerciceSeries -DbPath $DbPath -SeanceExerciceId ([int]$e.id))
             $series = @(Get-LignesSeriesExercice -Exercice $e -SeriesDetail $detail)
             $n = $series.Count
@@ -236,7 +241,7 @@ WHERE p.id = @Id
             foreach ($sr in $series) {
                 [void]$sb.Append('<tr>')
                 if ($sr.Numero -eq 1) {
-                    [void]$sb.Append("<td class='num' rowspan='$n'>$numero</td>")
+                    [void]$sb.Append("<td class='$classeNum' rowspan='$n'>$numero</td>")
                     [void]$sb.Append("<td class='violet nom' rowspan='$n'>$nomHtml</td>")
                     [void]$sb.Append("<td class='violet' rowspan='$n'>$(HtmlEncode $e.variante)</td>")
                 }
@@ -253,7 +258,9 @@ WHERE p.id = @Id
             }
             [void]$sb.Append('</tbody>')
         }
-        [void]$sb.Append('</table></div>')
+        [void]$sb.Append('</table>')
+        if (@($numeros | Where-Object { $_.EstSuperset }).Count -gt 0) { [void]$sb.Append("<p class='legende-ss'>$Script:LegendeSupersetHtml</p>") }
+        [void]$sb.Append('</div>')
     }
     [void]$sb.Append("</body></html>")
 
@@ -286,6 +293,9 @@ $Script:CouleurViolet = '#674EA7'     # en-tetes, colonne #, noms d'exercices
 $Script:CouleurLavande = '#8E7CC3'    # bande du nom de seance, titres "SEANCE n"
 $Script:CouleurSeparateur = '#B7B7B7' # trait entre deux exercices
 $Script:CouleurLigneSerie = '#D9D2E9' # trait leger entre deux series (zones a remplir)
+$Script:CouleurSuperset = '#3C78D8'   # numero des exercices en superset (legende SUPERSET du fichier d'origine)
+$Script:LegendeSuperset = "Enchainer l'ex. A puis l'ex. B sans temps de repos entre les 2, la recup s'effectue a la fin de l'ex. B"
+$Script:LegendeSupersetHtml = "<b>SUPERSET</b>Encha&icirc;ner l'ex. A puis l'ex. B sans temps de repos entre les 2, la r&eacute;cup s'effectue &agrave; la fin de l'ex. B"
 $Script:NbBlocsSuivi = 12             # nombre de semaines a noter cote a cote (une seance par semaine et par bloc)
 $Script:NbBlocsParPage = 6            # a l'impression : programme + 6 semaines par page
 $Script:NbSemainesTracking = 52       # onglet TRACKING : un an de suivi quotidien
@@ -841,9 +851,12 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
 
             # Une ligne par serie
             $ligne = $lEntete + 1
-            $numeroExercice = 0
+            $numeros = @(Get-NumerosExercices -Exercices $exercices)
+            $index = -1
             foreach ($e in $exercices) {
-                $numeroExercice++
+                $index++
+                $numeroExercice = if ($numeros[$index].EstSuperset) { $numeros[$index].Numero } else { [int]$numeros[$index].Numero }   # nombre si possible (pas de "nombre stocke en texte")
+                $fondNumero = if ($numeros[$index].EstSuperset) { $Script:CouleurSuperset } else { $Script:CouleurViolet }
                 $detail = @(Get-SeanceExerciceSeries -DbPath $DbPath -SeanceExerciceId ([int]$e.id))
                 $series = @(Get-LignesSeriesExercice -Exercice $e -SeriesDetail $detail)
                 $l1 = $ligne; $l2 = $ligne + $series.Count - 1
@@ -858,7 +871,7 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
                 }
                 $nom = ([string]$e.exercice_nom).ToUpperInvariant()
                 if ($e.notes) { $nom += "`n($($e.notes))" }
-                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $cDebut -L2 $l2 -C2 $cDebut -Valeur $numeroExercice) -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Gras
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $cDebut -L2 $l2 -C2 $cDebut -Valeur $numeroExercice) -Fond $fondNumero -Couleur '#FFFFFF' -Gras
                 Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $ci['EXERCICE'] -L2 $l2 -C2 $ci['EXERCICE'] -Valeur $nom) -Couleur $Script:CouleurViolet -Gras
                 Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $l1 -C1 $ci['VARIANTE'] -L2 $l2 -C2 $ci['VARIANTE'] -Valeur ([string]$e.variante).ToUpperInvariant()) -Couleur $Script:CouleurViolet -Gras
                 # Recup : une seule cellule si identique pour toutes les series (comme l'original), sinon serie par serie
@@ -908,6 +921,12 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
             if ($s.jour_semaine) { $nomSeance += " ($(([string]$s.jour_semaine).ToUpperInvariant()))" }
             Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lTitre -C1 $cB -L2 ($ligne - 1) -C2 $cB -Valeur $nomSeance) -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras -Taille 14 -Rotation 90
             Set-BordureExcel -Plage $ws.Cells[$lTitre, $cB, ($ligne - 1), $cB] -Cotes @('Right') -Couleur $Script:CouleurViolet
+            if (@($numeros | Where-Object { $_.EstSuperset }).Count -gt 0) {
+                # Legende comme dans l'onglet TRAINING d'origine (pas de repere en colonne A : ignoree a l'import)
+                $lLeg = $ligne + 1
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lLeg -C1 $cDebut -L2 $lLeg -C2 ($cDebut + 1) -Valeur 'SUPERSET') -Fond $Script:CouleurSuperset -Couleur '#FFFFFF' -Gras
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lLeg -C1 ($cDebut + 2) -L2 $lLeg -C2 $cFin -Valeur $Script:LegendeSuperset) -Couleur '#000000' -Gauche -Taille 9
+            }
 
             Set-LargeursSansRetourExcel -Ws $ws   # aucune cellule ne passe a la ligne
             # La partie programme reste visible quand on fait defiler les blocs SEANCE vers la droite
@@ -948,6 +967,109 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
     }
 }
 
+# ================= ROADMAP =================
+
+# Colonnes de l'onglet ROADMAP d'origine du coach (B..L) ; Cle = propriete de roadmap_semaines
+$Script:ColonnesRoadmap = @(
+    @{ Col = 2; Titre = 'SEM'; Cle = 'semaine_numero'; Largeur = 6 }
+    @{ Col = 3; Titre = 'DATE'; Cle = 'date_debut'; Largeur = 11 }
+    @{ Col = 4; Titre = 'PHASE'; Cle = 'phase'; Largeur = 14 }
+    @{ Col = 5; Titre = 'NUTRITION'; Cle = 'nutrition'; Largeur = 16 }
+    @{ Col = 6; Titre = 'POIDS MOYEN'; Cle = 'poids_moyen'; Largeur = 10 }
+    @{ Col = 7; Titre = 'CARDIO'; Cle = 'cardio_minutes'; Largeur = 9 }
+    @{ Col = 8; Titre = 'PAS'; Cle = 'pas'; Largeur = 9 }
+    @{ Col = 9; Titre = 'PRECISION DEPENSE'; Cle = 'precision_depense'; Largeur = 22 }
+    @{ Col = 10; Titre = 'PRECISION TRAINING'; Cle = 'precision_training'; Largeur = 22 }
+    @{ Col = 11; Titre = 'EVENEMENTS'; Cle = 'evenements'; Largeur = 18 }
+    @{ Col = 12; Titre = 'NOTES'; Cle = 'notes'; Largeur = 30 }
+)
+function Get-ColonnesRoadmap { return $Script:ColonnesRoadmap }
+
+function Export-ModeleRoadmapExcel {
+    <#
+        Roadmap hebdo au format de l'onglet ROADMAP d'origine : en-tetes violets sur 2 lignes (DEPENSE
+        regroupe CARDIO et PAS), numeros de semaine en lavande, une ligne par semaine. Si un client est
+        donne, ses semaines deja saisies sont pre-remplies ; les dates suivent de 7 en 7 a partir de la
+        premiere date connue. Colonne A masquee : reperes "R|" relus a l'import.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $Path,
+        [string] $DbPath,
+        [int] $ClientId = 0,
+        [int] $NbSemaines = 52,
+        [string] $Titre = 'ROADMAP'
+    )
+    $existantes = @{}
+    if ($DbPath -and $ClientId -gt 0) {
+        foreach ($s in @(Get-RoadmapSemaines -DbPath $DbPath -ClientId $ClientId)) { $existantes[[int]$s.semaine_numero] = $s }
+    }
+    if ($existantes.Count -gt 0) { $NbSemaines = [math]::Max($NbSemaines, ($existantes.Keys | Measure-Object -Maximum).Maximum) }
+    # Date de reference : premiere semaine datee (sa date - 7 x (numero - 1))
+    $dateSem1 = $null
+    foreach ($n in ($existantes.Keys | Sort-Object)) {
+        $d = $existantes[$n].date_debut
+        if ($d -and -not ($d -is [DBNull])) { $dateSem1 = ([datetime]$d).Date.AddDays(-7 * ($n - 1)); break }
+    }
+
+    if (Test-Path $Path) { Remove-Item $Path -Force }
+    $pkg = Open-ExcelPackage -Path $Path -Create
+    try {
+        $ws = Add-Worksheet -ExcelPackage $pkg -WorksheetName 'ROADMAP'
+        $ws.View.ShowGridLines = $false
+        $blanc = '#FFFFFF'
+        $ws.Column(1).Width = 3; $ws.Column(1).Hidden = $true
+        foreach ($c in $Script:ColonnesRoadmap) { $ws.Column($c.Col).Width = $c.Largeur }
+
+        Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 1 -C1 2 -L2 1 -C2 12 -Valeur $Titre.ToUpperInvariant()) -Fond $Script:CouleurViolet -Couleur $blanc -Taille 12 -Gras
+        $ws.Row(1).Height = 24
+        # En-tetes (lignes 3-4) : DEPENSE au-dessus de CARDIO / PAS, les autres fusionnes sur 2 lignes
+        $ws.Cells[3, 1].Value = 'R|ENTETE'
+        foreach ($c in $Script:ColonnesRoadmap) {
+            if ($c.Cle -in @('cardio_minutes', 'pas')) { continue }
+            Set-FusionExcel -Ws $ws -L1 3 -C1 $c.Col -L2 4 -C2 $c.Col -Valeur $c.Titre | Out-Null
+        }
+        Set-FusionExcel -Ws $ws -L1 3 -C1 7 -L2 3 -C2 8 -Valeur 'DEPENSE' | Out-Null
+        $ws.Cells[4, 7].Value = 'CARDIO'; $ws.Cells[4, 8].Value = 'PAS'
+        Set-StyleExcel -Plage $ws.Cells[3, 2, 4, 12] -Fond $Script:CouleurViolet -Couleur $blanc -Gras
+        Set-StyleExcel -Plage $ws.Cells[4, 7, 4, 8] -Fond $Script:CouleurLilas -Couleur $blanc -Gras
+        Set-BordureExcel -Plage $ws.Cells[3, 2, 4, 12] -Cotes @('Top', 'Bottom', 'Left', 'Right') -Couleur $blanc -Epaisseur 'Thin'
+        $ws.Row(3).Height = 18; $ws.Row(4).Height = 18
+
+        for ($n = 1; $n -le $NbSemaines; $n++) {
+            $l = 4 + $n
+            $ws.Row($l).Height = 18
+            $ws.Cells[$l, 1].Value = "R|$n"
+            $ws.Cells[$l, 2].Value = $n
+            $s = if ($existantes.ContainsKey($n)) { $existantes[$n] } else { $null }
+            $date = $null
+            if ($s -and $s.date_debut -and -not ($s.date_debut -is [DBNull])) { $date = ([datetime]$s.date_debut).Date }
+            elseif ($dateSem1) { $date = $dateSem1.AddDays(7 * ($n - 1)) }
+            if ($date) { $ws.Cells[$l, 3].Value = $date; $ws.Cells[$l, 3].Style.Numberformat.Format = 'dd/mm/yyyy' }
+            if ($s) {
+                foreach ($c in $Script:ColonnesRoadmap) {
+                    if ($c.Col -le 3) { continue }
+                    $v = $s.($c.Cle)
+                    if ($null -ne $v -and -not ($v -is [DBNull]) -and "$v" -ne '') { $ws.Cells[$l, $c.Col].Value = $v }
+                }
+            }
+        }
+        $fin = 4 + $NbSemaines
+        Set-StyleExcel -Plage $ws.Cells[5, 2, $fin, 2] -Fond $Script:CouleurLavande -Couleur $blanc -Gras
+        Set-StyleExcel -Plage $ws.Cells[5, 3, $fin, 12] -Couleur '#000000' -Taille 10
+        Set-StyleExcel -Plage $ws.Cells[5, 9, $fin, 12] -Couleur '#000000' -Taille 10 -Gauche
+        Set-BordureExcel -Plage $ws.Cells[5, 2, $fin, 12] -Cotes @('Bottom', 'Right') -Couleur $Script:CouleurGrisClair -Epaisseur 'Thin'
+        Set-BordureExcel -Plage $ws.Cells[$fin, 2, $fin, 12] -Cotes @('Bottom') -Couleur $Script:CouleurViolet
+        Set-BordureExcel -Plage $ws.Cells[3, 12, $fin, 12] -Cotes @('Right') -Couleur $Script:CouleurViolet
+        Set-BordureExcel -Plage $ws.Cells[3, 2, $fin, 2] -Cotes @('Left') -Couleur $Script:CouleurViolet
+        $ws.View.FreezePanes(5, 3)
+        $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
+        $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 0
+        $ws.PrinterSettings.RepeatRows = New-Object OfficeOpenXml.ExcelAddress('$3:$4')
+    } finally {
+        Close-ExcelPackage $pkg
+    }
+}
+
 # ================= NUTRITION =================
 
 # --- Charte de l'onglet NUTRITION d'origine ---
@@ -968,7 +1090,18 @@ function Get-DonneesJourNutrition {
         $lignes = @(Get-RepasAliments -DbPath $DbPath -RepasId ([int]$r.id))
         $tot = Get-TotauxRepas -Lignes $lignes
         foreach ($k in 'Kcal', 'Proteines', 'Glucides', 'Lipides', 'Fibres') { $jour.$k += $tot.$k }
-        [pscustomobject]@{ Nom = [string]$r.nom; Lignes = $lignes; Totaux = $tot; NbLignes = [math]::Max(4, $lignes.Count) }
+        # Lignes affichees : une recette ajoutee au repas = une ligne titre puis ses ingredients en dessous
+        $affichage = New-Object System.Collections.ArrayList
+        $groupePrecedent = $null
+        foreach ($l in $lignes) {
+            $groupe = if ($l.recette_groupe -is [DBNull] -or $null -eq $l.recette_groupe) { $null } else { [int]$l.recette_groupe }
+            if ($null -ne $groupe -and $groupe -ne $groupePrecedent) {
+                $affichage.Add([pscustomobject]@{ EstRecette = $true; Nom = [string]$l.recette_nom; Ligne = $null; DansRecette = $false }) | Out-Null
+            }
+            $affichage.Add([pscustomobject]@{ EstRecette = $false; Nom = [string]$l.aliment_nom; Ligne = $l; DansRecette = ($null -ne $groupe) }) | Out-Null
+            $groupePrecedent = $groupe
+        }
+        [pscustomobject]@{ Nom = [string]$r.nom; Lignes = $lignes; Affichage = @($affichage); Totaux = $tot; NbLignes = [math]::Max(4, $affichage.Count) }
     }
     [pscustomobject]@{ Repas = @($repasListe); Totaux = $jour }
 }
@@ -984,7 +1117,8 @@ function Export-PlanNutritionPdf {
     param(
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $PlanNutritionId,
-        [Parameter(Mandatory)] [string] $Path
+        [Parameter(Mandatory)] [string] $Path,
+        [bool] $AvecEquivalences = $true   # ajoute le tableau d'equivalences (bibliotheque) en fin de document
     )
 
     $plan = (Invoke-SqliteQuery -DataSource $DbPath -Query @"
@@ -1014,6 +1148,14 @@ WHERE pn.id = @Id
     .plan .l2 th.nut { background: $lil; }
     .plan td { font-size: 11px; border-bottom: 1px solid $gc; }
     .plan td.aliment { text-align: left; }
+    .plan td.aliment.ingredient { padding-left: 16px; }
+    .plan td.recette { text-align: left; font-weight: bold; color: $v; background: #F1EDF8; border-bottom: 1px solid $lil; }
+    .equiv { border: 2px solid $v; margin-top: 6px; break-inside: avoid; min-width: 55%; }
+    .equiv th { background: $v; color: #fff; padding: 7px 10px; font-size: 13px; letter-spacing: .5px; }
+    .equiv td { padding: 4px 10px; border-bottom: 1px solid $gc; font-size: 11px; }
+    .equiv td.ref { background: $lil; color: #fff; font-weight: bold; text-align: center; vertical-align: middle; width: 40%; border-bottom: 2px solid $v; }
+    .equiv td.ref .base { display: block; font-weight: normal; font-size: 9px; margin-top: 2px; }
+    .equiv tr.fin td { border-bottom: 2px solid $v; }
     .plan td.repas { background: $lav; color: #fff; font-weight: bold; font-size: 11px; text-transform: uppercase; border-bottom: none; }
     .plan td.etiq { background: $lil; color: #fff; font-weight: bold; font-size: 10px; }
     .plan td.tot { font-weight: bold; }
@@ -1050,9 +1192,12 @@ WHERE pn.id = @Id
             for ($i = 0; $i -lt $n; $i++) {
                 [void]$sb.Append('<tr>')
                 if ($i -eq 0) { [void]$sb.Append("<td class='repas' rowspan='$n'>$(HtmlEncode $r.Nom)</td>") }
-                if ($i -lt $r.Lignes.Count) {
-                    $l = $r.Lignes[$i]
-                    [void]$sb.Append("<td class='aliment'>$(HtmlEncode $l.aliment_nom)</td><td>$($l.quantite) $(HtmlEncode $l.unite)</td><td>$(Format-Nutri $l.kcal_calc)</td><td>$(Format-Nutri $l.proteines_calc)</td><td>$(Format-Nutri $l.glucides_calc)</td><td>$(Format-Nutri $l.lipides_calc)</td><td>$(Format-Nutri $l.fibres_calc)</td>")
+                if ($i -lt $r.Affichage.Count -and $r.Affichage[$i].EstRecette) {
+                    [void]$sb.Append("<td class='recette' colspan='7'>$(HtmlEncode $r.Affichage[$i].Nom)</td>")
+                } elseif ($i -lt $r.Affichage.Count) {
+                    $l = $r.Affichage[$i].Ligne
+                    $classe = if ($r.Affichage[$i].DansRecette) { 'aliment ingredient' } else { 'aliment' }
+                    [void]$sb.Append("<td class='$classe'>$(HtmlEncode $l.aliment_nom)</td><td>$($l.quantite) $(HtmlEncode $l.unite)</td><td>$(Format-Nutri $l.kcal_calc)</td><td>$(Format-Nutri $l.proteines_calc)</td><td>$(Format-Nutri $l.glucides_calc)</td><td>$(Format-Nutri $l.lipides_calc)</td><td>$(Format-Nutri $l.fibres_calc)</td>")
                 } else {
                     [void]$sb.Append("<td class='aliment'>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td>")
                 }
@@ -1069,6 +1214,22 @@ WHERE pn.id = @Id
         foreach ($x in @(,@('KCAL', 'Kcal')) + $etiquettes) { [void]$sb.Append("<tr><td class='etiq'>$($x[0])</td><td>$(Format-Nutri $t.($x[1]))</td></tr>") }
         [void]$sb.Append("</table></div>")
     }
+    if ($AvecEquivalences) {
+        $groupes = @(Get-EquivalencesGroupes -DbPath $DbPath | Where-Object { $_.Equivalents.Count -gt 0 })
+        if ($groupes.Count -gt 0) {
+            [void]$sb.Append("<table class='equiv'><tr><th colspan='2'>&Eacute;QUIVALENCES</th></tr>")
+            foreach ($g in $groupes) {
+                $n = $g.Equivalents.Count
+                for ($i = 0; $i -lt $n; $i++) {
+                    $classe = if ($i -eq $n - 1) { " class='fin'" } else { '' }
+                    [void]$sb.Append("<tr$classe>")
+                    if ($i -eq 0) { [void]$sb.Append("<td class='ref' rowspan='$n'>$(HtmlEncode $g.affichage)<span class='base'>m&ecirc;me apport en $(HtmlEncode $g.base_libelle)</span></td>") }
+                    [void]$sb.Append("<td>$(HtmlEncode $g.Equivalents[$i].affichage)</td></tr>")
+                }
+            }
+            [void]$sb.Append("</table>")
+        }
+    }
     [void]$sb.Append("</body></html>")
 
     $tempHtml = [System.IO.Path]::GetTempFileName() + ".html"
@@ -1084,7 +1245,8 @@ function Export-PlanNutritionExcel {
     param(
         [Parameter(Mandatory)] [string] $DbPath,
         [Parameter(Mandatory)] [int] $PlanNutritionId,
-        [Parameter(Mandatory)] [string] $Path
+        [Parameter(Mandatory)] [string] $Path,
+        [bool] $AvecEquivalences = $true
     )
 
     <#
@@ -1102,6 +1264,7 @@ FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
 
     # Colonnes : B repas | C aliment | D quantite | E..I kcal/pro/glu/lip/fib | J..K etiquette+valeur | L kcal repas | M espace | N..O RECAP
     $cRepas = 2; $cAliment = 3; $cQte = 4; $cKcal = 5; $cEtiq = 10; $cVal = 11; $cKcalRepas = 12; $cRecap = 14
+    $recettesExcel = New-Object System.Collections.ArrayList   # lignes titre de recette du repas en cours : @(ligne, nom)
     if (Test-Path $Path) { Remove-Item $Path -Force }
     $pkg = Open-ExcelPackage -Path $Path -Create
     try {
@@ -1146,9 +1309,11 @@ FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
                 for ($i = 0; $i -lt $n; $i++) {
                     $l = $r1 + $i
                     $ws.Row($l).Height = 16
-                    if ($i -lt $r.Lignes.Count) {
-                        $a = $r.Lignes[$i]
-                        $ws.Cells[$l, $cAliment].Value = [string]$a.aliment_nom
+                    if ($i -lt $r.Affichage.Count -and $r.Affichage[$i].EstRecette) {
+                        $recettesExcel.Add(@($l, $r.Affichage[$i].Nom)) | Out-Null   # style applique apres celui des aliments
+                    } elseif ($i -lt $r.Affichage.Count) {
+                        $a = $r.Affichage[$i].Ligne
+                        $ws.Cells[$l, $cAliment].Value = $(if ($r.Affichage[$i].DansRecette) { "    $($a.aliment_nom)" } else { [string]$a.aliment_nom })
                         $ws.Cells[$l, $cQte].Value = "$($a.quantite) $($a.unite)".Trim()
                         $j = 0; foreach ($k in 'kcal_calc', 'proteines_calc', 'glucides_calc', 'lipides_calc', 'fibres_calc') { $ws.Cells[$l, ($cKcal + $j)].Value = [double](Format-Nutri $a.$k); $j++ }
                     }
@@ -1156,6 +1321,10 @@ FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
                 Set-StyleExcel -Plage $ws.Cells[$r1, $cAliment, $r2, $cAliment] -Couleur '#000000' -Taille 10 -Gauche
                 Set-StyleExcel -Plage $ws.Cells[$r1, $cQte, $r2, ($cKcal + 4)] -Couleur '#000000'
                 Set-BordureExcel -Plage $ws.Cells[$r1, $cAliment, $r2, ($cKcal + 4)] -Cotes @('Bottom') -Couleur $Script:CouleurGrisClair -Epaisseur 'Thin'
+                foreach ($rec in $recettesExcel) {
+                    Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $rec[0] -C1 $cAliment -L2 $rec[0] -C2 ($cKcal + 4) -Valeur $rec[1]) -Fond '#F1EDF8' -Couleur $Script:CouleurViolet -Gras -Gauche
+                }
+                $recettesExcel.Clear()
                 # Totaux du repas : PRO / GLU / LIP / FIB repartis sur la hauteur du repas, kcal sur toute la hauteur
                 $groupes = Get-RepartitionTotaux -NbLignes $n
                 $debut = $r1
@@ -1194,6 +1363,30 @@ FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
 
             $ligne = [math]::Max($ligne, $lr) + 2
         }
+        if ($AvecEquivalences) {
+            # Tableau d'equivalences comme dans l'onglet NUTRITION d'origine : reference a gauche, equivalents a droite
+            $groupes = @(Get-EquivalencesGroupes -DbPath $DbPath | Where-Object { $_.Equivalents.Count -gt 0 })
+            if ($groupes.Count -gt 0) {
+                $cFinEq = $cKcal + 4
+                Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $ligne -C1 $cRepas -L2 $ligne -C2 $cFinEq -Valeur 'EQUIVALENCES') -Fond $Script:CouleurViolet -Couleur $blanc -Gras
+                $ws.Row($ligne).Height = 18
+                $debutEq = $ligne
+                $ligne++
+                foreach ($g in $groupes) {
+                    $n = $g.Equivalents.Count; $g1 = $ligne; $g2 = $ligne + $n - 1
+                    Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $g1 -C1 $cRepas -L2 $g2 -C2 $cAliment -Valeur "$($g.affichage) - meme apport en $($g.base_libelle)") -Fond $Script:CouleurLilas -Couleur $blanc -Gras
+                    for ($i = 0; $i -lt $n; $i++) {
+                        Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 ($g1 + $i) -C1 $cQte -L2 ($g1 + $i) -C2 $cFinEq -Valeur $g.Equivalents[$i].affichage) -Couleur '#000000' -Gauche
+                        Set-BordureExcel -Plage $ws.Cells[($g1 + $i), $cQte, ($g1 + $i), $cFinEq] -Cotes @('Bottom') -Couleur $Script:CouleurGrisClair -Epaisseur 'Thin'
+                        $ws.Row($g1 + $i).Height = 16
+                    }
+                    Set-BordureExcel -Plage $ws.Cells[$g2, $cRepas, $g2, $cFinEq] -Cotes @('Bottom') -Couleur $Script:CouleurViolet
+                    $ligne = $g2 + 1
+                }
+                Set-BordureExcel -Plage $ws.Cells[$debutEq, $cRepas, ($ligne - 1), $cRepas] -Cotes @('Left') -Couleur $Script:CouleurViolet
+                Set-BordureExcel -Plage $ws.Cells[$debutEq, $cFinEq, ($ligne - 1), $cFinEq] -Cotes @('Right') -Couleur $Script:CouleurViolet
+            }
+        }
         Set-LargeursSansRetourExcel -Ws $ws   # aucune cellule ne passe a la ligne
         $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
         $ws.PrinterSettings.FitToPage = $true; $ws.PrinterSettings.FitToWidth = 1; $ws.PrinterSettings.FitToHeight = 0
@@ -1205,4 +1398,5 @@ FROM plans_nutrition pn JOIN clients c ON c.id = pn.client_id WHERE pn.id = @Id
 Export-ModuleMember -Function Find-NavigateurPdf, ConvertTo-PdfDepuisHtml, Export-ProgrammePdf, Export-ProgrammeExcel, `
     Export-FeuilleSeanceExcel, Export-PlanNutritionPdf, Export-PlanNutritionExcel, Get-ValeurAvecDetailSeries, `
     Add-OngletTrackingExcel, Get-LundiCetteSemaine, Get-CatalogueTracking, Get-ReglagesTracking, Set-ReglagesTracking, `
-    Get-ReglagesProgramme, Set-ReglagesProgramme, Get-RecapSeriesMuscles, Get-NombreSeriesExport
+    Get-ReglagesProgramme, Set-ReglagesProgramme, Get-RecapSeriesMuscles, Get-NombreSeriesExport, `
+    Export-ModeleRoadmapExcel, Get-ColonnesRoadmap

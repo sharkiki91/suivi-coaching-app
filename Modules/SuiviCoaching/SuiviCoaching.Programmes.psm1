@@ -145,17 +145,18 @@ function New-SeanceExercice {
         [string] $Tempo,
         [string] $Rir,
         [string] $Variante,
-        [string] $Notes
+        [string] $Notes,
+        [int] $Superset = 0
     )
     $ordreMax = (Invoke-SqliteQuery -DataSource $DbPath -Query "SELECT COALESCE(MAX(ordre), -1) AS m FROM seance_exercices WHERE seance_id = @SeanceId" -SqlParameters @{ SeanceId = $SeanceId }).m
     $query = @"
-INSERT INTO seance_exercices (seance_id, exercice_id, ordre, series, repetitions, charge, recuperation_s, tempo, rir, variante, notes)
-VALUES (@SeanceId, @ExerciceId, @Ordre, @Series, @Repetitions, @Charge, @RecuperationS, @Tempo, @Rir, @Variante, @Notes);
+INSERT INTO seance_exercices (seance_id, exercice_id, ordre, series, repetitions, charge, recuperation_s, tempo, rir, variante, notes, superset)
+VALUES (@SeanceId, @ExerciceId, @Ordre, @Series, @Repetitions, @Charge, @RecuperationS, @Tempo, @Rir, @Variante, @Notes, @Superset);
 SELECT last_insert_rowid() AS id;
 "@
     (Invoke-SqliteQuery -DataSource $DbPath -Query $query -SqlParameters @{
         SeanceId = $SeanceId; ExerciceId = $ExerciceId; Ordre = ($ordreMax + 1)
-        Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Rir = $Rir; Variante = $Variante; Notes = $Notes
+        Series = $Series; Repetitions = $Repetitions; Charge = $Charge; RecuperationS = $RecuperationS; Tempo = $Tempo; Rir = $Rir; Variante = $Variante; Notes = $Notes; Superset = $Superset
     }).id
 }
 
@@ -307,7 +308,37 @@ function Move-SeanceExercice {
     Move-LigneExercice -DbPath $DbPath -Contexte 'Programme' -Id $Id -Direction $Direction
 }
 
-Export-ModuleMember -Function Get-Programmes, New-Programme, Remove-Programme, `
+function Switch-SupersetExercice {
+    <# Lie (ou delie) l'exercice a l'exercice suivant de la seance / du modele : superset = enchaines sans recup entre les deux. #>
+    param(
+        [Parameter(Mandatory)] [string] $DbPath,
+        [Parameter(Mandatory)] [ValidateSet('Programme', 'Modele')] [string] $Contexte,
+        [Parameter(Mandatory)] [int] $Id
+    )
+    $t = Get-TablesExercice -Contexte $Contexte
+    Invoke-SqliteQuery -DataSource $DbPath -Query "UPDATE $($t.Lignes) SET superset = CASE WHEN COALESCE(superset, 0) = 1 THEN 0 ELSE 1 END WHERE id = @Id" -SqlParameters @{ Id = $Id }
+}
+
+function Get-NumerosExercices {
+    <#
+        Numerote les exercices d'une seance (dans l'ordre) comme sur la feuille du coach : 1, 2, 3...
+        Un superset partage un seul numero avec une lettre par exercice (3A, 3B). Retourne, pour chaque
+        exercice, un objet { Numero ; EstSuperset }.
+    #>
+    param([Parameter(Mandatory)] [AllowEmptyCollection()] [array] $Exercices)
+    $lettres = 'ABCDEFGHIJ'
+    $numero = 0; $rang = 0; $lieAuPrecedent = $false
+    for ($i = 0; $i -lt $Exercices.Count; $i++) {
+        $lieAuSuivant = ($i -lt $Exercices.Count - 1) -and ([string]$Exercices[$i].superset -eq '1')
+        if ($lieAuPrecedent) { $rang++ } else { $numero++; $rang = 0 }
+        $estSuperset = $lieAuPrecedent -or $lieAuSuivant
+        $texte = if ($estSuperset) { "$numero$($lettres[[math]::Min($rang, 9)])" } else { [string]$numero }
+        [pscustomobject]@{ Numero = $texte; EstSuperset = $estSuperset }
+        $lieAuPrecedent = $lieAuSuivant
+    }
+}
+
+Export-ModuleMember -Function Switch-SupersetExercice, Get-NumerosExercices, Get-Programmes, New-Programme, Remove-Programme, `
     Get-Seances, New-Seance, Remove-Seance, Move-Seance, Update-SeanceJour, `
     Get-SeanceExercices, New-SeanceExercice, Update-SeanceExercice, Remove-SeanceExercice, `
     Get-SeanceExerciceSeries, New-SeanceExerciceSerie, Remove-SeanceExerciceSeriesTout, `

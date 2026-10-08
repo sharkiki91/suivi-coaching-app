@@ -6,6 +6,20 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.25.0] - 2026-10-08
+
+### Ajouté
+- **Nutrition – total de la journée** : bande violette en haut de l'écran Nutrition avec le total kcal / protéines / glucides / lipides / fibres de tous les repas du type de jour sélectionné (jusqu'ici seul le total par repas était visible dans l'appli ; le PDF l'avait déjà).
+- **Nutrition – modifier et réordonner** : cliquer une ligne d'un repas la charge dans le formulaire, "Modifier la ligne" enregistre le nouvel aliment ou la nouvelle quantité ; flèches ▲▼ pour déplacer une ligne dans le repas et pour changer l'ordre des repas (ex. dîner créé avant le déjeuner). L'ordre est repris dans le PDF et l'Excel.
+- **Recettes** : nouvel onglet Bibliothèques > Recettes (intitulé, notes de préparation, ingrédients avec quantités, totaux calculés). "Ajouter la recette" dans un repas copie ses ingrédients (× nombre de portions) ; dans l'appli, le PDF et l'Excel, l'intitulé de la recette s'affiche avec ses ingrédients en retrait en dessous. Une recette se déplace d'un bloc et peut être retirée d'un coup.
+- **Tableau d'équivalences** : nouvel onglet Bibliothèques > Équivalences, pré-rempli avec le bloc EQUIVALENCES de l'onglet NUTRITION d'origine. Les quantités équivalentes sont calculées depuis la bibliothèque d'aliments (même apport en calories pour les aliments peu caloriques, sinon en protéines / glucides / lipides selon l'aliment de référence) ; bouton "Suggérer depuis la bibliothèque". Le tableau est ajouté à la fin du PDF et de l'Excel nutrition (case "Avec le tableau d'équivalences", cochée par défaut, mémorisée).
+- **Supersets** : bouton "Superset avec le suivant" (Programmes et modèles de séance) pour enchaîner deux exercices (ou plus) sans récup. Numérotation 3A / 3B dans l'appli, numéro en bleu (#3C78D8, couleur de la légende SUPERSET d'origine) dans le PDF, l'Excel et la feuille de séance, avec la légende sous la séance. Recopié lors d'une création de séance depuis un modèle.
+- **Roadmap au format d'origine** : "Télécharger la roadmap (Excel)" génère l'onglet ROADMAP comme dans le fichier du coach (en-têtes violets sur deux lignes, DEPENSE → CARDIO / PAS, SEM en lavande, 52 semaines, dates de 7 en 7), pré-rempli avec les semaines du client. Nouveau champ **Précision dépense** (colonne PRECISION DEPENSE). L'import relit ce format, l'ancien modèle, et les onglets ROADMAP des fichiers clients existants (colonnes reconnues par leur titre).
+
+### Corrigé
+- Roadmap : une case numérique laissée vide (poids moyen, dépense, cardio, pas) était enregistrée comme 0 ; elle reste maintenant vide. Une ligne vide d'un fichier importé n'efface plus une semaine déjà saisie.
+- Deux messages de l'écran Programmes / modèles s'affichaient avec des accents illisibles (« SÃ©lectionne... »).
+
 ## [1.24.0] - 2026-10-04
 
 ### Ajouté

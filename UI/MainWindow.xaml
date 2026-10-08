@@ -459,6 +459,131 @@
                         </Grid>
                     </TabItem>
 
+                    <!-- Recettes -->
+                    <TabItem Header="Recettes">
+                        <Grid Margin="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="Recettes" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
+                                <ListBox x:Name="ListeRecettes" Height="220" DisplayMemberPath="nom" />
+                                <Label Content="Nom de la recette *" Margin="0,8,0,0" />
+                                <TextBox x:Name="TxtRecetteNom" />
+                                <Label Content="Notes / préparation" />
+                                <TextBox x:Name="TxtRecetteNotes" Height="70" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" />
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button x:Name="BtnRecetteNouveau" Content="Nouveau" />
+                                    <Button x:Name="BtnRecetteEnregistrer" Content="Enregistrer" Background="#27AE60" Foreground="White" />
+                                    <Button x:Name="BtnRecetteSupprimer" Content="Supprimer" Background="#C0392B" Foreground="White" />
+                                </StackPanel>
+                                <TextBlock Text="Une recette ajoutée à un repas y est copiée : la modifier ici ne change pas les plans déjà faits." FontStyle="Italic" Foreground="Gray" TextWrapping="Wrap" Margin="0,8,0,0" />
+                            </StackPanel>
+                            <Grid Grid.Column="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Text="Ingrédients (sélectionne une ligne pour la modifier)" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
+                                <DataGrid x:Name="GridRecetteIngredients" Grid.Row="1" Margin="0,0,0,8">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Aliment" Binding="{Binding aliment_nom}" Width="200" />
+                                        <DataGridTextColumn Header="Quantité" Binding="{Binding quantite}" Width="80" />
+                                        <DataGridTextColumn Header="Unité" Binding="{Binding unite}" Width="55" />
+                                        <DataGridTextColumn Header="Kcal" Binding="{Binding kcal_calc}" Width="65" />
+                                        <DataGridTextColumn Header="Protéines" Binding="{Binding proteines_calc}" Width="75" />
+                                        <DataGridTextColumn Header="Glucides" Binding="{Binding glucides_calc}" Width="75" />
+                                        <DataGridTextColumn Header="Lipides" Binding="{Binding lipides_calc}" Width="70" />
+                                        <DataGridTextColumn Header="Fibres" Binding="{Binding fibres_calc}" Width="65" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                <TextBlock x:Name="TxtTotauxRecette" Grid.Row="2" FontWeight="Bold" Margin="0,0,0,8" />
+                                <Border Grid.Row="3" BorderBrush="#DDD" BorderThickness="1" Padding="12">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="CmbRecetteAliment" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
+                                            <TextBox x:Name="TxtRecetteQuantite" Grid.Column="1" Margin="0,0,6,0" Text="100" />
+                                            <Button x:Name="BtnRecetteIngredientAjouter" Grid.Column="2" Content="Ajouter" Background="#27AE60" Foreground="White" />
+                                            <Button x:Name="BtnRecetteIngredientModifier" Grid.Column="3" Content="Modifier la ligne" />
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <Button x:Name="BtnRecetteIngredientMonter" Content="▲" MinWidth="36" />
+                                            <Button x:Name="BtnRecetteIngredientDescendre" Content="▼" MinWidth="36" />
+                                            <Button x:Name="BtnRecetteIngredientSupprimer" Content="Supprimer la ligne sélectionnée" Background="#C0392B" Foreground="White" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </TabItem>
+
+                    <!-- Equivalences -->
+                    <TabItem Header="Équivalences">
+                        <Grid Margin="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="300" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="Aliments de référence" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
+                                <ListBox x:Name="ListeEquivalences" Height="220" DisplayMemberPath="affichage" />
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button x:Name="BtnEquivalenceMonter" Content="▲" MinWidth="36" />
+                                    <Button x:Name="BtnEquivalenceDescendre" Content="▼" MinWidth="36" />
+                                    <Button x:Name="BtnEquivalenceSupprimer" Content="Supprimer" Background="#C0392B" Foreground="White" />
+                                </StackPanel>
+                                <Label Content="Aliment de référence *" Margin="0,8,0,0" />
+                                <ComboBox x:Name="CmbEquivalenceReference" DisplayMemberPath="affichage" />
+                                <Label Content="Quantité de référence" />
+                                <TextBox x:Name="TxtEquivalenceQuantite" Text="100" />
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button x:Name="BtnEquivalenceNouveau" Content="Nouveau" />
+                                    <Button x:Name="BtnEquivalenceEnregistrer" Content="Enregistrer" Background="#27AE60" Foreground="White" />
+                                </StackPanel>
+                                <TextBlock Text="Les quantités équivalentes sont calculées depuis la bibliothèque d'aliments : même apport en calories (légumes), sinon en protéines, glucides ou lipides selon l'aliment de référence. Le tableau est ajouté au PDF nutrition." FontStyle="Italic" Foreground="Gray" TextWrapping="Wrap" Margin="0,8,0,0" />
+                            </StackPanel>
+                            <Grid Grid.Column="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock x:Name="TxtEquivalenceTitre" Grid.Row="0" Text="Équivalents" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                <DataGrid x:Name="GridEquivalents" Grid.Row="1" Margin="0,0,0,8">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Aliment équivalent" Binding="{Binding aliment_nom}" Width="250" />
+                                        <DataGridTextColumn Header="Quantité équivalente" Binding="{Binding quantite_affichage}" Width="150" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1" Padding="12">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="CmbEquivalentAAjouter" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
+                                            <Button x:Name="BtnEquivalentAjouter" Grid.Column="1" Content="Ajouter" Background="#27AE60" Foreground="White" />
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <Button x:Name="BtnEquivalentSuggerer" Content="Suggérer depuis la bibliothèque" ToolTip="Ajoute les 5 aliments les plus proches (même type d'apport, répartition des macros la plus proche)" />
+                                            <Button x:Name="BtnEquivalentSupprimer" Content="Supprimer la ligne sélectionnée" Background="#C0392B" Foreground="White" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </TabItem>
+
                     <!-- Complements -->
                     <TabItem Header="Compléments">
                         <Grid Margin="8">
@@ -535,6 +660,7 @@
 
                                 <DataGrid x:Name="GridModeleExercices" Grid.Row="0" Margin="0,0,0,12">
                                     <DataGrid.Columns>
+                                        <DataGridTextColumn Header="#" Binding="{Binding numero_affichage}" Width="40" />
                                         <DataGridTextColumn Header="Exercice" Binding="{Binding exercice_nom}" Width="150" />
                                         <DataGridTextColumn Header="Variante" Binding="{Binding variante}" Width="90" />
                                         <DataGridTextColumn Header="Muscle" Binding="{Binding muscle_cible}" Width="90" />
@@ -594,6 +720,7 @@
                                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                             <Button x:Name="BtnModeleExerciceMonter" Content="▲" MinWidth="36" ToolTip="Monter l'exercice sélectionné" />
                                             <Button x:Name="BtnModeleExerciceDescendre" Content="▼" MinWidth="36" ToolTip="Descendre l'exercice sélectionné" />
+                                            <Button x:Name="BtnModeleExerciceSuperset" Content="Superset avec le suivant" Background="#3C78D8" Foreground="White" ToolTip="Lie (ou délie) l'exercice sélectionné au suivant : ils s'enchaînent sans récup, la récup se fait après le second" />
                                             <Button x:Name="BtnModeleExerciceSupprimer" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" />
                                             <CheckBox x:Name="ChkModExADetailSeries" Content="Détail par série (répétitions/charge/récup différents à chaque série)" VerticalAlignment="Center" Margin="12,0,0,0" />
                                         </StackPanel>
@@ -673,6 +800,7 @@
 
                         <DataGrid x:Name="GridSeanceExercices" Grid.Row="0" Margin="0,0,0,12">
                             <DataGrid.Columns>
+                                <DataGridTextColumn Header="#" Binding="{Binding numero_affichage}" Width="40" />
                                 <DataGridTextColumn Header="Exercice" Binding="{Binding exercice_nom}" Width="150" />
                                 <DataGridTextColumn Header="Variante" Binding="{Binding variante}" Width="90" />
                                 <DataGridTextColumn Header="Muscle" Binding="{Binding muscle_cible}" Width="90" />
@@ -732,6 +860,7 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <Button x:Name="BtnExerciceMonter" Content="▲" MinWidth="36" ToolTip="Monter l'exercice sélectionné" />
                                     <Button x:Name="BtnExerciceDescendre" Content="▼" MinWidth="36" ToolTip="Descendre l'exercice sélectionné" />
+                                    <Button x:Name="BtnExerciceSuperset" Content="Superset avec le suivant" Background="#3C78D8" Foreground="White" ToolTip="Lie (ou délie) l'exercice sélectionné au suivant : ils s'enchaînent sans récup, la récup se fait après le second" />
                                     <Button x:Name="BtnExerciceSupprimerDeSeance" Content="Supprimer l'exercice sélectionné" Background="#C0392B" Foreground="White" />
                                     <CheckBox x:Name="ChkExADetailSeries" Content="Détail par série (répétitions/charge/récup différents à chaque série)" VerticalAlignment="Center" Margin="12,0,0,0" />
                                 </StackPanel>
@@ -757,7 +886,7 @@
 
                 <TextBlock Grid.Row="0" Text="Plans nutritionnels" FontSize="22" FontWeight="Bold" Margin="0,0,0,12" />
 
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12" VerticalAlignment="Center">
+                <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12" VerticalAlignment="Center">
                     <Label Content="Client :" VerticalAlignment="Center" />
                     <ComboBox x:Name="CmbNutritionClient" Width="200" DisplayMemberPath="affichage" Margin="4,0,16,0" />
                     <Label Content="Plan :" VerticalAlignment="Center" />
@@ -766,7 +895,8 @@
                     <Button x:Name="BtnPlanSupprimer" Content="Supprimer" Background="#C0392B" Foreground="White" />
                     <Button x:Name="BtnPlanExporterPdf" Content="Exporter en PDF" Background="#27AE60" Foreground="White" Margin="20,0,8,0" />
                     <Button x:Name="BtnPlanExporterExcel" Content="Exporter en Excel" />
-                </StackPanel>
+                    <CheckBox x:Name="ChkPlanEquivalences" Content="Avec le tableau d'équivalences" VerticalAlignment="Center" Margin="12,0,0,0" IsChecked="True" ToolTip="Ajoute le tableau d'équivalences (Bibliothèques, onglet Équivalences) à la fin du PDF et de l'Excel" />
+                </WrapPanel>
 
                 <Grid Grid.Row="2">
                     <Grid.ColumnDefinitions>
@@ -787,7 +917,11 @@
                     <StackPanel Grid.Column="1" Margin="0,0,12,0">
                         <TextBlock Text="Repas" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
                         <ListBox x:Name="ListeRepas" Height="200" DisplayMemberPath="nom" />
-                        <Button x:Name="BtnRepasSupprimer" Content="Supprimer" Background="#C0392B" Foreground="White" Margin="0,8,0,4" HorizontalAlignment="Left" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
+                            <Button x:Name="BtnRepasMonter" Content="▲" MinWidth="36" ToolTip="Monter le repas sélectionné" />
+                            <Button x:Name="BtnRepasDescendre" Content="▼" MinWidth="36" ToolTip="Descendre le repas sélectionné" />
+                            <Button x:Name="BtnRepasSupprimer" Content="Supprimer" Background="#C0392B" Foreground="White" />
+                        </StackPanel>
                         <Label Content="Nouveau repas (ex: Repas 1)" />
                         <TextBox x:Name="TxtNouveauRepas" />
                         <Button x:Name="BtnRepasAjouter" Content="Ajouter" Background="#27AE60" Foreground="White" HorizontalAlignment="Left" Margin="0,4,0,0" />
@@ -795,13 +929,19 @@
 
                     <Grid Grid.Column="2">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <DataGrid x:Name="GridRepasAliments" Grid.Row="0" Margin="0,0,0,8">
+                        <Border Grid.Row="0" Background="#674EA7" Padding="10,6" Margin="0,0,0,8">
+                            <TextBlock x:Name="TxtTotalJour" Foreground="White" FontWeight="Bold" TextWrapping="Wrap" Text="Total de la journée : sélectionne un type de jour" />
+                        </Border>
+
+                        <DataGrid x:Name="GridRepasAliments" Grid.Row="1" Margin="0,0,0,8">
                             <DataGrid.Columns>
+                                <DataGridTextColumn Header="Recette" Binding="{Binding recette_nom}" Width="120" />
                                 <DataGridTextColumn Header="Aliment" Binding="{Binding aliment_nom}" Width="180" />
                                 <DataGridTextColumn Header="Quantité" Binding="{Binding quantite}" Width="80" />
                                 <DataGridTextColumn Header="Unité" Binding="{Binding unite}" Width="55" />
@@ -813,22 +953,42 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
-                        <TextBlock x:Name="TxtTotauxRepas" Grid.Row="1" FontWeight="Bold" Margin="0,0,0,8" />
+                        <TextBlock x:Name="TxtTotauxRepas" Grid.Row="2" FontWeight="Bold" Margin="0,0,0,8" />
 
-                        <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1" Padding="12">
+                        <Border Grid.Row="3" BorderBrush="#DDD" BorderThickness="1" Padding="12">
                             <StackPanel>
-                                <TextBlock Text="Ajouter un aliment à ce repas" FontWeight="Bold" Margin="0,0,0,8" />
+                                <TextBlock Text="Aliment (sélectionne une ligne du tableau pour la modifier)" FontWeight="Bold" Margin="0,0,0,8" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="100" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <ComboBox x:Name="CmbAlimentAAjouter" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
                                     <TextBox x:Name="TxtQuantiteAliment" Grid.Column="1" Margin="0,0,6,0" Text="100" />
                                     <Button x:Name="BtnAlimentAjouterRepas" Grid.Column="2" Content="Ajouter" Background="#27AE60" Foreground="White" />
+                                    <Button x:Name="BtnAlimentModifierRepas" Grid.Column="3" Content="Modifier la ligne" />
                                 </Grid>
-                                <Button x:Name="BtnAlimentSupprimerDeRepas" Content="Supprimer l'aliment sélectionné" Background="#C0392B" Foreground="White" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button x:Name="BtnAlimentMonter" Content="▲" MinWidth="36" ToolTip="Monter la ligne sélectionnée (une recette se déplace en entier)" />
+                                    <Button x:Name="BtnAlimentDescendre" Content="▼" MinWidth="36" ToolTip="Descendre la ligne sélectionnée (une recette se déplace en entier)" />
+                                    <Button x:Name="BtnAlimentSupprimerDeRepas" Content="Supprimer la ligne sélectionnée" Background="#C0392B" Foreground="White" />
+                                    <Button x:Name="BtnRecetteRetirerDuRepas" Content="Retirer toute la recette" Background="#C0392B" Foreground="White" ToolTip="Supprime tous les ingrédients de la recette de la ligne sélectionnée" />
+                                </StackPanel>
+                                <TextBlock Text="Ajouter une recette (bibliothèque Recettes)" FontWeight="Bold" Margin="0,12,0,8" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="70" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox x:Name="CmbRecetteAAjouter" Grid.Column="0" DisplayMemberPath="affichage" Margin="0,0,6,0" />
+                                    <Label Grid.Column="1" Content="Portions :" VerticalAlignment="Center" />
+                                    <TextBox x:Name="TxtRecettePortions" Grid.Column="2" Margin="0,0,6,0" Text="1" ToolTip="Multiplie les quantités de la recette (ex. 0,5 ou 2)" />
+                                    <Button x:Name="BtnRecetteAjouterRepas" Grid.Column="3" Content="Ajouter la recette" Background="#27AE60" Foreground="White" />
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -939,7 +1099,7 @@
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,0,0,8">
-                                <Button x:Name="BtnTelechargerModeleRoadmap" Content="Télécharger le modèle vierge" />
+                                <Button x:Name="BtnTelechargerModeleRoadmap" Content="Télécharger la roadmap (Excel)" ToolTip="Tableau ROADMAP au format du coach, pré-rempli avec les semaines déjà saisies pour ce client" />
                                 <Button x:Name="BtnImporterRoadmap" Content="Importer la roadmap remplie..." Background="#27AE60" Foreground="White" />
                             </StackPanel>
 
@@ -951,6 +1111,7 @@
                                     <DataGridTextColumn Header="Poids moyen" Binding="{Binding poids_moyen}" Width="90" />
                                     <DataGridTextColumn Header="Dépense" Binding="{Binding depense_calorique}" Width="80" />
                                     <DataGridTextColumn Header="Pas" Binding="{Binding pas}" Width="70" />
+                                    <DataGridTextColumn Header="Précision dépense" Binding="{Binding precision_depense}" Width="120" />
                                     <DataGridTextColumn Header="Notes" Binding="{Binding notes}" Width="*" />
                                 </DataGrid.Columns>
                             </DataGrid>
@@ -973,6 +1134,8 @@
                                 <TextBox x:Name="TxtRoadmapCardio" />
                                 <Label Content="Pas" />
                                 <TextBox x:Name="TxtRoadmapPas" />
+                                <Label Content="Précision dépense" />
+                                <TextBox x:Name="TxtRoadmapPrecisionDepense" />
                                 <Label Content="Précisions training" />
                                 <TextBox x:Name="TxtRoadmapPrecisionTraining" />
                                 <Label Content="Événements" />
