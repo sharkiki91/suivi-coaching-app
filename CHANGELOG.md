@@ -6,6 +6,12 @@ Le format suit les principes de [Keep a Changelog](https://keepachangelog.com/fr
 numéro de version suit le [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF) :
 un numéro **MINEUR** augmente quand une fonctionnalité est ajoutée, un **CORRECTIF** quand un bug est corrigé.
 
+## [1.25.1] - 2026-10-10
+
+### Corrigé
+- **Administratif – nouvelle commande / nouveau devis** : la liste des clients restait vide si on allait dans Administratif sans être passé par l'écran Clients (au démarrage, l'appli ouvre le tableau de bord). Elle est maintenant chargée à chaque ouverture de l'écran Administratif.
+- **TRACKING – date de la semaine 1** : elle était imposée (lundi de la semaine de début du programme, ou de la semaine en cours) et chaque date était figée dans l'Excel. La fenêtre d'options avant l'export (feuille de séance et modèle de suivi quotidien) a maintenant un champ **1er jour de la semaine 1**, pré-rempli comme avant mais modifiable librement (n'importe quel jour de la semaine). Dans le fichier, seule cette 1re date est une valeur : les autres dates (+1 jour) et les JOUR sont des formules, donc changer cette seule case dans Excel / Google Sheets décale tout le tracking.
+
 ## [1.25.0] - 2026-10-08
 
 ### Ajouté

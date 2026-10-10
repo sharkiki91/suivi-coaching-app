@@ -41,6 +41,12 @@
                     <TextBlock Text="Tracking quotidien (onglet TRACKING) :" Width="300" VerticalAlignment="Center" />
                     <TextBox x:Name="TxtDialogSemainesTracking" Width="60" HorizontalContentAlignment="Center" ToolTip="De 1 à 104 semaines" />
                 </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <TextBlock Text="1er jour de la semaine 1 (TRACKING) :" Width="300" VerticalAlignment="Center" />
+                    <DatePicker x:Name="DateDialogDebutTracking" Width="140" ToolTip="N'importe quel jour : les jours suivants se calent dessus" />
+                </StackPanel>
+                <TextBlock TextWrapping="Wrap" Foreground="#555" FontSize="12" Margin="0,4,0,0"
+                           Text="Dans le fichier Excel, il suffit aussi de changer la 1re date de la semaine 1 : toutes les autres dates et les jours suivent automatiquement." />
             </StackPanel>
         </Border>
         <StackPanel Orientation="Horizontal" Margin="0,20,0,0" HorizontalAlignment="Right">

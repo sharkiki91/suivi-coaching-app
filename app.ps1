@@ -1,7 +1,7 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppVersion = '1.25.0'
+$AppVersion = '1.25.1'
 $AppRoot = $PSScriptRoot
 $DbPath = Join-Path $AppRoot 'Data\suivi_coaching.db'
 $BackupFolder = Join-Path $AppRoot 'Data\Backups'
@@ -171,6 +171,8 @@ function Show-DialogNouvelElement {
     return $null
 }
 
+$Script:DateDebutTracking = $null   # 1er jour de la semaine 1 choisi dans Show-DialogColonnesTracking
+
 function Show-DialogColonnesTracking {
     <#
         Choix des colonnes de l'onglet TRACKING (groupees par theme), de la case BILAN et du nombre de semaines
@@ -178,8 +180,10 @@ function Show-DialogColonnesTracking {
         Le choix est enregistre (Set-ReglagesTracking) et repris par defaut la fois suivante.
         Retourne $true si le coach a valide, $false s'il a annule.
     #>
-    param([switch] $AvecSemainesSeance)
+    param([switch] $AvecSemainesSeance, [datetime] $DateDebutParDefaut = (Get-LundiCetteSemaine))
     $dlg = Import-XamlWindow -Path (Join-Path $AppRoot 'UI\DialogColonnesTracking.xaml')
+    $dateDebutTracking = $dlg.FindName('DateDialogDebutTracking')
+    $dateDebutTracking.SelectedDate = $DateDebutParDefaut.Date
     $dlg.Owner = $Window
     $panel = $dlg.FindName('PanelDialogColonnes')
     $chkBilan = $dlg.FindName('ChkDialogBilan')
@@ -218,6 +222,8 @@ function Show-DialogColonnesTracking {
         $nbSeance = 0; $nbTracking = 0
         if ($AvecSemainesSeance -and -not ([int]::TryParse($txtSemSeance.Text.Trim(), [ref]$nbSeance) -and $nbSeance -ge 1 -and $nbSeance -le 52)) { Show-Erreur "Nombre de semaines du tableau des séances : mets un nombre entre 1 et 52."; return }
         if (-not ([int]::TryParse($txtSemTracking.Text.Trim(), [ref]$nbTracking) -and $nbTracking -ge 1 -and $nbTracking -le 104)) { Show-Erreur "Nombre de semaines du tracking : mets un nombre entre 1 et 104."; return }
+        if (-not $dateDebutTracking.SelectedDate) { Show-Erreur "Indique le 1er jour de la semaine 1 du tracking."; return }
+        $Script:DateDebutTracking = $dateDebutTracking.SelectedDate.Date
         Set-ReglagesTracking -DbPath $DbPath -Colonnes $cles -AvecBilan ([bool]$chkBilan.IsChecked) -LienBilan $lien -NbSemaines $nbTracking -NbSemainesSeance $nbSeance
         $dlg.DialogResult = $true
     })
@@ -470,7 +476,7 @@ function Show-Panel {
 
 (Get-Ctrl 'BtnNavDashboard').Add_Click({ Show-Panel $PanelDashboard; Update-VueDashboard })
 (Get-Ctrl 'BtnNavClients').Add_Click({ Show-Panel $PanelClients; Update-VueClients })
-(Get-Ctrl 'BtnNavAdministratif').Add_Click({ Show-Panel $PanelAdministratif; Update-VueAdministratif })
+(Get-Ctrl 'BtnNavAdministratif').Add_Click({ Show-Panel $PanelAdministratif; Update-CombosClients; Update-VueAdministratif })
 (Get-Ctrl 'BtnNavBibliotheques').Add_Click({ Show-Panel $PanelBibliotheques; Update-VueBibliotheques })
 (Get-Ctrl 'BtnNavProgrammes').Add_Click({ Show-Panel $PanelProgrammes; Update-VueProgrammesClients })
 (Get-Ctrl 'BtnNavNutrition').Add_Click({ Show-Panel $PanelNutrition; Update-VueNutritionClients })
@@ -1654,12 +1660,19 @@ foreach ($chk in $ChkProgrammeTempo, $ChkProgrammeRir) { $chk.Add_Checked($enreg
 (Get-Ctrl 'BtnProgrammeExporterFeuilleSeance').Add_Click({
     Invoke-Protege {
         if (-not $CmbProgrammeSelection.SelectedItem) { Show-Erreur "Selectionne un programme."; return }
-        if (-not (Show-DialogColonnesTracking -AvecSemainesSeance)) { return }
+        # Semaine 1 proposee : lundi de la semaine de debut du programme (sinon cette semaine), modifiable
+        $debutProg = $CmbProgrammeSelection.SelectedItem.date_debut
+        $debutPropose = Get-LundiCetteSemaine
+        if ($debutProg -and $debutProg -isnot [System.DBNull]) {
+            $d = ([datetime]$debutProg).Date
+            $debutPropose = $d.AddDays(-((([int]$d.DayOfWeek) + 6) % 7))
+        }
+        if (-not (Show-DialogColonnesTracking -AvecSemainesSeance -DateDebutParDefaut $debutPropose)) { return }
         $dialog = New-Object Microsoft.Win32.SaveFileDialog
         $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
         $dialog.FileName = "Feuille_de_seance.xlsx"
         if ($dialog.ShowDialog()) {
-            Export-FeuilleSeanceExcel -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Path $dialog.FileName
+            Export-FeuilleSeanceExcel -DbPath $DbPath -ProgrammeId $CmbProgrammeSelection.SelectedItem.id -Path $dialog.FileName -DateDebutTracking $Script:DateDebutTracking
             Show-Info "Feuille de séance créée (même présentation que ton onglet TRAINING : programme à gauche, blocs SEMAINE à droite ; un onglet par séance), un onglet RECAP SERIES (séries par groupe musculaire) et un onglet TRACKING pour le suivi quotidien.`n`nEnvoie ce seul fichier à ton client : chaque semaine il note la DATE en haut d'un bloc puis ses répétitions et charges série par série, et chaque jour il remplit sa ligne dans TRACKING. Réimporte-le ensuite via Suivi (Séances réalisées ou Tracking quotidien, au choix) : les séances et le suivi quotidien sont rangés chacun à leur place."
         }
     }
@@ -2307,7 +2320,7 @@ function Update-VueSuiviQuotidien {
         $dialog.Filter = 'Fichier Excel (*.xlsx)|*.xlsx'
         $dialog.FileName = 'Modele_Suivi_Quotidien.xlsx'
         if ($dialog.ShowDialog()) {
-            Export-ModeleTrackingExcel -Path $dialog.FileName -DbPath $DbPath
+            Export-ModeleTrackingExcel -Path $dialog.FileName -DbPath $DbPath -DateDebut $Script:DateDebutTracking
             Show-Info "Modèle créé. Envoie ce fichier à ton client pour qu'il le remplisse."
         }
     }

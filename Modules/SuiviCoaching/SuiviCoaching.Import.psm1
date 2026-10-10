@@ -300,7 +300,7 @@ function Import-QuestionnaireDepuisExcel {
 function Export-ModeleTrackingExcel {
     <#
         Genere le modele de suivi quotidien a envoyer au client : l'onglet TRACKING (52 semaines, dates
-        deja remplies a partir du lundi de la semaine de -DateDebut, semaine en cours par defaut), avec
+        deja remplies a partir de -DateDebut, lundi de cette semaine par defaut), avec
         les colonnes et la case BILAN choisies par le coach (-DbPath). C'est le meme onglet que celui
         inclus dans la feuille de seance (Programmes > Exporter la feuille de seance).
     #>

@@ -592,7 +592,9 @@ function Add-OngletTrackingExcel {
     <#
         Ajoute l'onglet TRACKING (suivi quotidien) sur le modele de l'onglet TRACKING d'origine du coach :
         un bloc par semaine (52 par defaut) = ligne d'en-tetes, 7 jours (DATE + JOUR deja remplis, a partir
-        du lundi de la semaine de -DateDebut), ligne MOYENNE de la semaine. Les colonnes choisies sont
+        de -DateDebut, n'importe quel jour), ligne MOYENNE de la semaine. Seule la 1re date est une valeur :
+        les autres (= date precedente + 1) et les JOUR sont des formules, donc changer cette seule cellule
+        dans Excel decale tout le tracking. Les colonnes choisies sont
         regroupees par theme (SOMMEIL, NUTRITION, TRAINING, SANTE) separes par une bande de couleur, avec
         un fond alterne d'un theme a l'autre ; a droite, une case BILAN par semaine (fusionnee) avec le
         lien du formulaire de bilan.
@@ -612,8 +614,7 @@ function Add-OngletTrackingExcel {
 
     if (-not $Colonnes) { $Colonnes = @($Script:CatalogueTracking | Where-Object { $_.Defaut } | ForEach-Object { $_.Cle }) }
     $choisies = @($Script:CatalogueTracking | Where-Object { $Colonnes -contains $_.Cle })
-    $lundi = $DateDebut.Date.AddDays(-((([int]$DateDebut.DayOfWeek) + 6) % 7))
-    $culture = [System.Globalization.CultureInfo]::GetCultureInfo('fr-FR')
+    $lPrecedente = $null   # ligne du jour precedent (sa date + 1 = date du jour suivant)
 
     $ws = Add-Worksheet -ExcelPackage $Pkg -WorksheetName 'TRACKING'
     $ws.View.ShowGridLines = $false
@@ -639,7 +640,7 @@ function Add-OngletTrackingExcel {
 
     Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 1 -C1 $cSemaine -L2 1 -C2 $cFin -Valeur $Titre) -Fond $Script:CouleurViolet -Couleur '#FFFFFF' -Taille 12 -Gras
     $ws.Row(1).Height = 24
-    $consigne = "Chaque jour : remplis ta ligne (les dates sont deja indiquees). Notes de 1 (mauvais) a 5 (excellent), heures au format 23:00. Laisse vide ce que tu n'as pas mesure."
+    $consigne = "Chaque jour : remplis ta ligne (les dates sont deja indiquees ; pour les decaler, change seulement la 1re date de la semaine 1). Notes de 1 (mauvais) a 5 (excellent), heures au format 23:00. Laisse vide ce que tu n'as pas mesure."
     if ($choisies | Where-Object { $_.Cle -eq 'jour_non_tracke' }) { $consigne += " NON TRACKE : mets X si tu n'as pas suivi ta nutrition ce jour-la." }
     if ($AvecBilan) { $consigne += " En fin de semaine : clique sur BILAN pour remplir ton bilan." }
     Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 2 -C1 $cSemaine -L2 2 -C2 $cFin -Valeur $consigne) -Couleur $Script:CouleurViolet -Italique -Gauche
@@ -662,12 +663,16 @@ function Add-OngletTrackingExcel {
         # Numero de semaine, sur toute la hauteur du bloc
         Set-StyleExcel -Plage (Set-FusionExcel -Ws $ws -L1 $lEntete -C1 $cSemaine -L2 $lMoy -C2 $cSemaine -Valeur ($s + 1)) -Couleur $Script:CouleurViolet -Gras -Taille 20
 
-        # Jours : DATE + JOUR deja remplis
+        # Jours : DATE + JOUR deja remplis. 1re date = valeur, les suivantes = date precedente + 1
+        # (le jour 1 d'une semaine suit le jour 7 de la precedente), JOUR calcule depuis la date.
         for ($j = 0; $j -lt 7; $j++) {
-            $jour = $lundi.AddDays($s * 7 + $j)
-            $ws.Cells[($lJ1 + $j), 1].Value = 'J|'
-            $ws.Cells[($lJ1 + $j), $cDate].Value = $jour
-            $ws.Cells[($lJ1 + $j), $cJour].Value = $culture.DateTimeFormat.GetDayName($jour.DayOfWeek).ToUpperInvariant()
+            $l = $lJ1 + $j
+            $ws.Cells[$l, 1].Value = 'J|'
+            if ($lPrecedente) { $ws.Cells[$l, $cDate].Formula = "$($ws.Cells[$lPrecedente, $cDate].Address)+1" }
+            else { $ws.Cells[$l, $cDate].Value = $DateDebut.Date }
+            $adrDate = $ws.Cells[$l, $cDate].Address
+            $ws.Cells[$l, $cJour].Formula = "IF($adrDate=`"`",`"`",CHOOSE(WEEKDAY($adrDate,2),`"LUNDI`",`"MARDI`",`"MERCREDI`",`"JEUDI`",`"VENDREDI`",`"SAMEDI`",`"DIMANCHE`"))"
+            $lPrecedente = $l
         }
         $pDates = $ws.Cells[$lJ1, $cDate, $lJ7, $cDate]
         Set-StyleExcel -Plage $pDates -Fond $Script:CouleurLavande -Couleur '#FFFFFF' -Gras
@@ -724,6 +729,7 @@ function Add-OngletTrackingExcel {
         $cf.HighValue.Color = [System.Drawing.ColorTranslator]::FromHtml('#B6D7A8')
     }
 
+    [OfficeOpenXml.CalculationExtension]::Calculate($ws)   # dates/jours deja calcules dans le fichier (lecture ou import sans repasser par Excel)
     Set-LargeursSansRetourExcel -Ws $ws   # aucune cellule ne passe a la ligne
     $ws.View.FreezePanes(3, ($cJour + 1))
     $ws.PrinterSettings.Orientation = [OfficeOpenXml.eOrientation]::Landscape
@@ -755,7 +761,8 @@ function Export-FeuilleSeanceExcel {
         [Parameter(Mandatory)] [int] $ProgrammeId,
         [Parameter(Mandatory)] [string] $Path,
         [int] $NbBlocs = -1,   # -1 : nombre de semaines choisi par le coach (12 par defaut)
-        [string] $TexteConsigne
+        [string] $TexteConsigne,
+        $DateDebutTracking   # 1er jour de la semaine 1 du TRACKING ; vide : lundi de la semaine de debut du programme
     )
 
     $prog = Invoke-SqliteQuery -DataSource $DbPath -Query @"
@@ -951,7 +958,11 @@ FROM programmes p JOIN clients c ON c.id = p.client_id WHERE p.id = @Id
 
         if ($NbBlocs -gt 0) {
             # Suivi quotidien dans le meme fichier, a partir du debut du programme (sinon du lundi de cette semaine)
-            $debut = if ($prog.date_debut) { ([datetime]$prog.date_debut).Date } else { Get-LundiCetteSemaine }
+            if ($DateDebutTracking) { $debut = ([datetime]$DateDebutTracking).Date }
+            elseif ($prog.date_debut -and $prog.date_debut -isnot [System.DBNull]) {
+                $d = ([datetime]$prog.date_debut).Date
+                $debut = $d.AddDays(-((([int]$d.DayOfWeek) + 6) % 7))
+            } else { $debut = Get-LundiCetteSemaine }
             $reglages = Get-ReglagesTracking -DbPath $DbPath
             Add-OngletTrackingExcel -Pkg $pkg -DateDebut $debut -Titre "SUIVI QUOTIDIEN - $($prog.client_prenom) $($prog.client_nom)".ToUpperInvariant() `
                 -Colonnes $reglages.Colonnes -AvecBilan $reglages.AvecBilan -LienBilan $reglages.LienBilan -NbSemaines $reglages.NbSemaines
